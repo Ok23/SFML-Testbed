@@ -11,7 +11,7 @@ public:
 	struct DebugSettings
 	{
 		size_t rulerBase = 100;
-		size_t gridStep = 32;
+		size_t gridStep = 64;
 		size_t gridDensity = 42;
 		float cameraSpeed = 0.1f;
 		float cameraZoomSpeed = 1.f + (1.f / 3.f);

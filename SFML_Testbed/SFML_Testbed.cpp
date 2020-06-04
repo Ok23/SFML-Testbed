@@ -8,8 +8,8 @@ class TestbedClass : public Testbed
 protected:
 	void load() override
 	{
-		debug.gridStep = 64;
-		sh.setSize(sf::Vector2f(debug.gridStep, debug.gridStep));
+		//debug.gridStep = 64;
+		sh.setSize(sf::Vector2f(64, 64));
 		debug.drawGrid = true;
 	}
 	void draw() override

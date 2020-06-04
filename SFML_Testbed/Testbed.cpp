@@ -403,12 +403,13 @@ void Testbed::internalDrawHandler()
 		float startY = view.getCenter().y - view.getSize().y / 2.f;
 		float endY = startY + view.getSize().y;
 
-		auto screenSize = std::max(view.getSize().x, view.getSize().y);
+		auto screenSizeRatio = std::max(view.getSize().x / window.getSize().x, view.getSize().y / window.getSize().y);
 
-		while ((screenSize / gridStep) > debug.gridDensity)
+		while ((endX - startX) / gridStep > debug.gridStep)
 		{
 			gridStep *= 4;
 		}
+
 		_gridStep = gridStep;
 
 		startX -= std::fmodf(startX, gridStep) + gridStep;
@@ -422,7 +423,7 @@ void Testbed::internalDrawHandler()
 		}
 
 		window.draw(vertices, i, sf::PrimitiveType::Lines);
-		print(gridStep);
+		print(gridStep, screenSizeRatio);
 
 		i = 0;
 		for (float y = startY; y < endY; y += gridStep)
