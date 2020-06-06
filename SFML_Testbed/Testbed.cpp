@@ -6,6 +6,7 @@
 #include <wykobi/wykobi_utilities.hpp>
 #pragma warning(disable: 26451)
 
+
 template<typename To, typename From>
 static To as(From && from)
 {
@@ -15,12 +16,14 @@ static To as(From && from)
 using vec = wykobi::vector2d<float>;
 using point = wykobi::point2d<float>;
 
+
 Testbed::Testbed(sf::Vector2u windowSize, std::string_view title)
 	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
 }
+
 
 int Testbed::run()
 {
@@ -175,24 +178,48 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 {
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
-	if (key.code == sf::Keyboard::R and key.control)
-	{
-		resetViewport();
-	}
-	if (key.code == sf::Keyboard::L)
+
+	// Hotkeys
+	if (debug.toggleGridHotkey == key and pressed) 
+		debug.drawGrid = debug.drawGrid ? false : true;
+	else if (debug.toggleViewportHotkey == key and pressed)
+		debug.drawViewport = debug.drawViewport ? false : true;
+	else if (debug.toggleInfoHotkey == key and pressed)
+		debug.drawInfo = debug.drawInfo ? false : true;
+	else if (debug.beginRulerHotkey == key)
 	{
 		if (!pressed)
 			_screenRuler = false;
 		else if (_screenRuler == false)
 		{
 			auto view = window.getView();
-			window.setView(getGuiView());
-			_rulerStart = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+			//window.setView(getGuiView());
+			_rulerStart = sf::Mouse::getPosition(window);
+			_rulerWorldStart = window.mapPixelToCoords(_rulerStart);
 			_screenRuler = true;
-			window.setView(view);
+			//window.setView(view);
 		}
-
 	}
+	if (key.code == sf::Keyboard::R and key.control and pressed)
+	{
+		resetViewport();
+	}
+
+	//if (key.code == sf::Keyboard::L)
+	//{
+	//	if (!pressed)
+	//		_screenRuler = false;
+	//	else if (_screenRuler == false)
+	//	{
+	//		auto view = window.getView();
+	//		//window.setView(getGuiView());
+	//		_rulerStart = sf::Mouse::getPosition(window);
+	//		_rulerWorldStart = window.mapPixelToCoords(_rulerStart);
+	//		_screenRuler = true;
+	//		//window.setView(view);
+	//	}
+
+	//}
 
 }
 
@@ -200,7 +227,7 @@ void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button
 {
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
-	if (button.button == sf::Mouse::Middle and pressed)
+	if (button.button == sf::Mouse::Middle and pressed) // Save mouse coords for shift
 	{
 		if (debug.cameraControl)
 		{
@@ -212,7 +239,7 @@ void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button
 void Testbed::internalEventHandler(const sf::Event event)
 {
 	auto view = window.getView();
-	if (event.type == sf::Event::Resized)
+	if (event.type == sf::Event::Resized) // Resize view when window resized
 	{
 		sf::Vector2f oldViewSize = view.getSize();
 		float zoomLevel;
@@ -228,11 +255,11 @@ void Testbed::internalEventHandler(const sf::Event event)
 		window.setView(view);
 
 	}
-	else if (event.type == sf::Event::MouseMoved)
+	else if (event.type == sf::Event::MouseMoved) // Update mousePos
 	{
 		mousePos = { event.mouseMove.x, event.mouseMove.y };
 	}
-	else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame)
+	else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame) // Zoom when mouse scroll view
 	{
 		_viewSizeChanged = true;
 		sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
@@ -255,6 +282,7 @@ void Testbed::internalEventHandler(const sf::Event event)
 		const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
 		const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
 		view.move(offsetCoords);
+		//_rulerStart -= offsetCoords;
 		window.setView(view);
 
 	}
@@ -309,6 +337,11 @@ void Testbed::internalUpdateHandler()
 			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
 
+			//// Screen ruler
+			//{ // TODO: some text
+			//	_rulerStart -= shift * getGuiView().getSize().x / view.getSize().x;
+			//}
+
 			view.setCenter((view.getCenter() + shift));
 			window.setView(view);
 		}
@@ -332,6 +365,7 @@ void Testbed::internalDrawHandler()
 	if (!debug.enableDrawing)
 		return;
 
+	// Draw ruler
 	if (_screenRuler)
 	{
 		sf::Vector2f toPos = window.mapPixelToCoords(sf::Mouse::getPosition());
@@ -340,8 +374,10 @@ void Testbed::internalDrawHandler()
 
 		window.setView(guiView);
 
+		//auto relativeToGui = (_rulerWorldStart - );
 		auto mousePos = as<point>(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
-		vertices[0].position = _rulerStart;
+
+		vertices[0].position = window.mapPixelToCoords(_rulerStart);
 		vertices[1].position = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 		auto angle = wykobi::cartesian_angle(as<point>(vertices[0].position), as<point>(mousePos));
 
@@ -357,19 +393,52 @@ void Testbed::internalDrawHandler()
 		vertices[4].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[4].position), as<point>(vertices[1].position)));
 		vertices[5].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[5].position), as<point>(vertices[1].position)));
 
+		// Dynamic points on ruler
+		auto absoluteDistance = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position));
+		auto relativeDistance = absoluteDistance / scaleDiff;
+
+		auto segmentsInterval = debug.rulerBase;
+		size_t segmentsCount = relativeDistance / segmentsInterval;
+		float segmentIntervalRatio = (segmentsCount / absoluteDistance);
+
+		print(scaleDiff, segmentsInterval / absoluteDistance);
+		while (segmentIntervalRatio > 0.1f) // Auto scale points interval
+		{
+			segmentsInterval *= 2;
+			segmentsCount = relativeDistance / segmentsInterval;
+			segmentIntervalRatio = (segmentsCount / absoluteDistance);
+		}
+		size_t verticeShift = 6;
+		for (size_t i = 0; i < segmentsCount; ++i)
+		{
+			float pointShift = (segmentsInterval * (i + 1)) * scaleDiff;
+			vertices[verticeShift].position = vertices[0].position + sf::Vector2f { 0.f - pointShift, 3.0f };
+			vertices[verticeShift + 1].position = vertices[0].position + sf::Vector2f { 0.f - pointShift, -3.0f };
+
+			vertices[verticeShift].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[verticeShift].position), as<point>(vertices[0].position)));
+			vertices[verticeShift + 1].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[verticeShift + 1].position), as<point>(vertices[0].position)));
+
+			vertices[verticeShift].color = { 229, 231, 252, 200 };
+			vertices[verticeShift + 1].color = { 229, 231, 252, 200 };
+			verticeShift += 2;
+		}
+		//
+
 		auto length = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position)) / scaleDiff;
-		scaleFormatStr << (length > 1 ? std::round(length) : length) << " px.";
+		scaleFormatStr << (length > 1 ? std::round(length) : length) << " - " << '\n' << segmentsInterval << " px.";
 		text.setString(scaleFormatStr.str());
 		scaleFormatStr.str("");
 
-		text.setPosition((size_t)((vertices[1].position.x) - text.getLocalBounds().width / 2), vertices[1].position.y + 20.f);
+		int yCoord = std::clamp(vertices[1].position.y + 20.f, 0.f + 4.f, guiView.getSize().y - text.getLocalBounds().height - 4.f);
+		int xCoord = std::clamp(vertices[1].position.x - text.getLocalBounds().width / 2.f, 0.f + 4.f, guiView.getSize().x - text.getLocalBounds().width - 4.f);
 
+		text.setPosition(xCoord, yCoord);
 		for (size_t i = 0; i < 6; ++i)
 		{
 			vertices[i].color = { 229, 231, 252, 255 };
 		}
 
-		window.draw(vertices, 6, sf::PrimitiveType::Lines);
+		window.draw(vertices, 6 + segmentsCount * 2, sf::PrimitiveType::Lines);
 		window.draw(text);
 		window.setView(view);
 	}

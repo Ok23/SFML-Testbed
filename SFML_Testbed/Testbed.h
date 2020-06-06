@@ -3,6 +3,17 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 
+using Key = sf::Keyboard::Key;
+
+
+struct Hotkey : public sf::Event::KeyEvent
+{
+	Hotkey(sf::Keyboard::Key key, bool alt = false, bool control = false, bool shift = false, bool system = false) : sf::Event::KeyEvent { key, alt, control, shift, system }{};
+	bool operator == (sf::Event::KeyEvent key) { return key.code == code and key.alt == alt and key.control == control and key.shift == shift and key.system == system; };
+	bool operator != (sf::Event::KeyEvent key) { return key.code != code or key.alt != alt or key.control != control or key.shift != shift or key.system != system; };
+	bool operator == (Hotkey key) { return key.code == code and key.alt == alt and key.control == control and key.shift == shift and key.system == system; };
+	bool operator != (Hotkey key) { return key.code != code or key.alt != alt or key.control != control or key.shift != shift or key.system != system; };
+};
 
 
 class Testbed
@@ -10,6 +21,10 @@ class Testbed
 public:
 	struct DebugSettings
 	{
+		Hotkey toggleGridHotkey {sf::Keyboard::Key::G, false, true};
+		Hotkey toggleViewportHotkey {sf::Keyboard::Key::V, false, true};
+		Hotkey toggleInfoHotkey {sf::Keyboard::Key::I, false, true};
+		Hotkey beginRulerHotkey {sf::Keyboard::Key::L};
 		size_t rulerBase = 100;
 		size_t gridDensity = 32;
 		float maxViewSize = 1e6f;
@@ -18,7 +33,7 @@ public:
 		float cameraSpeed = 0.1f;
 		float cameraZoomSpeed = 1.f + (1.f / 3.f);
 		sf::Uint8 gridOpaque = 64;
-		bool drawGrid = false;
+		bool drawGrid = true;
 		bool drawViewport = true;
 		bool drawInfo = true;
 		bool enableDrawing = true;
@@ -73,7 +88,8 @@ private:
 
 	sf::Vector2f _cameraMousePixelCoord;
 	sf::Vector2f _viewSize;
-	sf::Vector2f _rulerStart;
+	sf::Vector2i _rulerStart;
+	sf::Vector2f _rulerWorldStart;
 	float _previousTargetZoom;
 	float _gridStep;
 	float _rulerLength;

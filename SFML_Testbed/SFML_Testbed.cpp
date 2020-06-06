@@ -4,15 +4,6 @@
 #include <wykobi/wykobi_algorithm.hpp>
 
 
-template<typename To, typename From>
-To as(From && from)
-{
-	return *((To *)&from);
-}
-
-
-
-
 class TestbedClass : public Testbed
 {
 protected:
@@ -27,6 +18,18 @@ protected:
 	}
 	void onKey(const sf::Event::KeyEvent key, bool pressed) override
 	{
+		if (key.code == sf::Keyboard::Left and pressed)
+		{
+			auto view = window.getView();
+			view.rotate(-1);
+			window.setView(view);
+		}
+		else if (key.code == sf::Keyboard::Right and pressed)
+		{
+			auto view = window.getView();
+			view.rotate(1);
+			window.setView(view);
+		}
 	}
 
 };
