@@ -11,17 +11,19 @@ public:
 	struct DebugSettings
 	{
 		size_t rulerBase = 100;
-		size_t gridStep = 64;
-		size_t gridDensity = 42;
+		size_t gridDensity = 32;
+		float maxViewSize = 1e6f;
+		float minViewSize = 1e-2f;
+		float gridStep = 4.f;
 		float cameraSpeed = 0.1f;
 		float cameraZoomSpeed = 1.f + (1.f / 3.f);
-		sf::Uint8 gridOpaque = 85;
+		sf::Uint8 gridOpaque = 64;
 		bool drawGrid = false;
-		bool dynamicGridStep = true;
 		bool drawViewport = true;
 		bool drawInfo = true;
 		bool enableDrawing = true;
 		bool cameraControl = true;
+		bool keyboardCameraControl = false;
 		bool inputControl = true;
 	};
 
@@ -52,6 +54,7 @@ protected:
 
 	sf::RenderWindow window;
 	DebugSettings debug;
+	sf::View getGuiView();
 private:
 	void internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed);
 	void internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed);
@@ -70,9 +73,13 @@ private:
 
 	sf::Vector2f _cameraMousePixelCoord;
 	sf::Vector2f _viewSize;
+	sf::Vector2f _rulerStart;
 	float _previousTargetZoom;
-	bool _zoomChanged;
-	int _gridStep;
+	float _gridStep;
+	float _rulerLength;
+	bool _viewSizeChanged;
+	bool _screenRuler;
+	bool _guiViewApplied;
 };
 
 

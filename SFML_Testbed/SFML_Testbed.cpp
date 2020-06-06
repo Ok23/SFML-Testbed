@@ -1,20 +1,26 @@
 ﻿#include "pch.h"
 #include "Testbed.h"
+#include <wykobi/wykobi.hpp>
+#include <wykobi/wykobi_algorithm.hpp>
+
+
+template<typename To, typename From>
+To as(From && from)
+{
+	return *((To *)&from);
+}
+
+
 
 
 class TestbedClass : public Testbed
 {
-	sf::RectangleShape sh;
 protected:
 	void load() override
 	{
-		//debug.gridStep = 64;
-		sh.setSize(sf::Vector2f(64, 64));
-		debug.drawGrid = true;
 	}
 	void draw() override
 	{
-		window.draw(sh);
 	}
 	void update(const sf::Time delta) override
 	{

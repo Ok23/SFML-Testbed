@@ -2,11 +2,21 @@
 #include "Testbed.h"
 #include <algorithm>
 #include <numeric>
-
+#include <wykobi/wykobi.hpp>
+#include <wykobi/wykobi_utilities.hpp>
 #pragma warning(disable: 26451)
 
-Testbed::Testbed(sf::Vector2u windowSize, std::string_view title) 
-	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _zoomChanged(true), _gridStep(0)
+template<typename To, typename From>
+static To as(From && from)
+{
+	return *((To *)&from);
+}
+
+using vec = wykobi::vector2d<float>;
+using point = wykobi::point2d<float>;
+
+Testbed::Testbed(sf::Vector2u windowSize, std::string_view title)
+	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
@@ -100,7 +110,7 @@ int Testbed::run()
 		window.display();
 
 		blockControlCurFrame = false;
-		_zoomChanged = false;
+		_viewSizeChanged = false;
 	}
 	ImGui::SFML::Shutdown();
 
@@ -137,8 +147,9 @@ void Testbed::resetViewport()
 	sf::View view = window.getView();
 	view.setSize(window.getSize().x, window.getSize().y);
 	view.setCenter(sf::Vector2f { window.getSize().x / 2.f, window.getSize().y / 2.f });
+	view.setRotation(0);
 	window.setView(view);
-	_zoomChanged = true;
+	_viewSizeChanged = true;
 }
 
 void Testbed::blockCurFrameControl()
@@ -151,6 +162,15 @@ const sf::Vector2i Testbed::getMousePos() const
 	return mousePos;
 }
 
+sf::View Testbed::getGuiView()
+{
+	sf::View guiView = window.getView();
+	guiView.setSize({ (float)window.getSize().x, (float)window.getSize().y });
+	guiView.setCenter(guiView.getSize() / 2.f);
+	guiView.setRotation(0);
+	return guiView;
+}
+
 void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 {
 	if (!debug.inputControl or blockControlCurFrame)
@@ -159,6 +179,21 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 	{
 		resetViewport();
 	}
+	if (key.code == sf::Keyboard::L)
+	{
+		if (!pressed)
+			_screenRuler = false;
+		else if (_screenRuler == false)
+		{
+			auto view = window.getView();
+			window.setView(getGuiView());
+			_rulerStart = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+			_screenRuler = true;
+			window.setView(view);
+		}
+
+	}
+
 }
 
 void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed)
@@ -195,11 +230,11 @@ void Testbed::internalEventHandler(const sf::Event event)
 	}
 	else if (event.type == sf::Event::MouseMoved)
 	{
-		mousePos = {event.mouseMove.x, event.mouseMove.y};
+		mousePos = { event.mouseMove.x, event.mouseMove.y };
 	}
 	else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame)
 	{
-		_zoomChanged = true;
+		_viewSizeChanged = true;
 		sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
 
 		const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
@@ -207,12 +242,12 @@ void Testbed::internalEventHandler(const sf::Event event)
 
 		if (event.mouseWheelScroll.delta < 0)
 		{
-			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < 1e6) // Prevent for scale upper than 1e6 pixels
+			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
 				view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
 		}
 		else
 		{
-			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > 1e-2) // Prevent for scale downer than 1e-2 pixels
+			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
 				view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
 		}
 
@@ -233,7 +268,7 @@ void Testbed::internalUpdateHandler()
 	{
 		auto view = window.getView();
 		auto viewSize = window.getView().getSize();
-		if (window.hasFocus() and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
+		if (window.hasFocus() and debug.keyboardCameraControl and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
 		{
 			float speed = debug.cameraSpeed * (debug.cameraSpeed * std::min(viewSize.x, viewSize.y));
 
@@ -271,8 +306,7 @@ void Testbed::internalUpdateHandler()
 		}
 		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.inputControl and !blockControlCurFrame)
 		{
-			using sf::Mouse;
-			auto mousePos = window.mapPixelToCoords(Mouse::getPosition());
+			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
 
 			view.setCenter((view.getCenter() + shift));
@@ -289,16 +323,56 @@ void Testbed::internalDrawHandler()
 	static std::ostringstream scaleFormatStr {};
 	static char textBuf[32];
 	auto view = window.getView();
-	sf::View guiView = view;
+	sf::View guiView = getGuiView();
 	scaleFormatStr.str("");
 
-
-	guiView.setSize({ (float)window.getSize().x, (float)window.getSize().y });
-	guiView.setCenter(guiView.getSize() / 2.f);
+	text.setCharacterSize(10);
+	text.setFont(defaultFont);
 
 	if (!debug.enableDrawing)
 		return;
 
+	if (_screenRuler)
+	{
+		sf::Vector2f toPos = window.mapPixelToCoords(sf::Mouse::getPosition());
+		const float scaleDiff = guiView.getSize().x / view.getSize().x;
+
+
+		window.setView(guiView);
+
+		auto mousePos = as<point>(window.mapPixelToCoords(sf::Mouse::getPosition(window)));
+		vertices[0].position = _rulerStart;
+		vertices[1].position = window.mapPixelToCoords(sf::Mouse::getPosition(window));
+		auto angle = wykobi::cartesian_angle(as<point>(vertices[0].position), as<point>(mousePos));
+
+		vertices[2].position = vertices[0].position + sf::Vector2f { 0.f, 5.f };
+		vertices[3].position = vertices[0].position + sf::Vector2f { 0.f, -5.f };
+
+		vertices[4].position = vertices[1].position + sf::Vector2f { 0.f, 5.f };
+		vertices[5].position = vertices[1].position + sf::Vector2f { 0.f, -5.f };
+
+		vertices[2].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[2].position), as<point>(vertices[0].position)));
+		vertices[3].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[3].position), as<point>(vertices[0].position)));
+
+		vertices[4].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[4].position), as<point>(vertices[1].position)));
+		vertices[5].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[5].position), as<point>(vertices[1].position)));
+
+		auto length = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position)) / scaleDiff;
+		scaleFormatStr << (length > 1 ? std::round(length) : length) << " px.";
+		text.setString(scaleFormatStr.str());
+		scaleFormatStr.str("");
+
+		text.setPosition((size_t)((vertices[1].position.x) - text.getLocalBounds().width / 2), vertices[1].position.y + 20.f);
+
+		for (size_t i = 0; i < 6; ++i)
+		{
+			vertices[i].color = { 229, 231, 252, 255 };
+		}
+
+		window.draw(vertices, 6, sf::PrimitiveType::Lines);
+		window.draw(text);
+		window.setView(view);
+	}
 	if (debug.drawInfo)
 	{
 		// Ruler
@@ -306,16 +380,16 @@ void Testbed::internalDrawHandler()
 		const size_t maxLength = 250;
 		const size_t minLength = 50;
 
-		//size_t scaleDiff = guiView.getSize().x / view.getSize().x;
-		const float scaleDiff = guiView.getSize().x / view.getSize().x;
+		const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
 
 		float rulerDynamicSize =
-			debug.rulerBase * (scaleDiff);
+			debug.rulerBase * (guiScaleDiff);
 
 		//auto rulerScreenLength = std::max((size_t)(rulerDynamicSize) % (maxLength), minLength);
+
 		auto rulerScreenLength = std::clamp(rulerDynamicSize, (float)minLength, (float)maxLength);
 
-		auto rulerWorldLength = rulerScreenLength / scaleDiff;
+		auto rulerWorldLength = rulerScreenLength / guiScaleDiff;
 
 
 		scaleFormatStr << (rulerWorldLength > 1 ? std::round(rulerWorldLength) : rulerWorldLength) << " px";
@@ -330,35 +404,32 @@ void Testbed::internalDrawHandler()
 		vertices[4] = sf::Vertex { { vertices[1].position.x, vertices[1].position.y + 5.f }, sf::Color { 229, 231, 252, 255 } };
 		vertices[5] = sf::Vertex { { vertices[1].position.x, vertices[1].position.y - 5.f }, sf::Color { 229, 231, 252, 255 } };
 
-		text.setCharacterSize(10);
+
 		text.setString(scaleFormatStr.str());
 		scaleFormatStr.str("");
 		auto textRect = text.getLocalBounds();
 
 		text.setPosition((size_t)((vertices[0].position.x + vertices[1].position.x) / 2.f - textRect.width / 2), vertices[0].position.y + 1);
-		text.setFont(defaultFont);
+
 
 		window.setView(guiView);
-		window.draw(vertices, 2, sf::PrimitiveType::LinesStrip);
-		window.draw(vertices + 2, 2, sf::PrimitiveType::LinesStrip);
-		window.draw(vertices + 4, 2, sf::PrimitiveType::LinesStrip);
+		window.draw(vertices, 6, sf::PrimitiveType::Lines);
 		window.draw(text);
 		window.setView(view);
 		// End ruler
 
 		scaleFormatStr.flush();
 		sf::Vector2f mousePos = window.mapPixelToCoords(getMousePos());
-		mousePos.y += 10.f;
 		scaleFormatStr << "(" << (int)mousePos.x << ", " << (int)mousePos.y << ")";
 		text.setString(scaleFormatStr.str());
 		sf::FloatRect textBound = text.getLocalBounds();
-		text.setPosition(guiView.getSize() - sf::Vector2f { 30.f, 40.f } -sf::Vector2f { textBound.width, textBound.height });
+		text.setPosition(guiView.getSize() - sf::Vector2f { 30.f, 40.f } - sf::Vector2f { textBound.width, textBound.height });
 		window.setView(guiView);
 		window.draw(text);
 		window.setView(view);
 	}
-	
 
+	// Draw viewport
 	if (debug.drawViewport)
 	{
 		sf::Vector2f guiViewSize = guiView.getSize();
@@ -386,50 +457,55 @@ void Testbed::internalDrawHandler()
 		window.draw(vertices + 9, 3, sf::PrimitiveType::LineStrip);
 	}
 
-	//debug.drawGrid = true;
-	if (debug.drawGrid)
+	// Draw grid
+	if (debug.drawGrid and debug.gridStep > 0 and debug.gridDensity > 0)
 	{
 		sf::Color vertexColor { 71, 71, 71, debug.gridOpaque };
 
-		int gridStep;
-		if (_zoomChanged)
-			gridStep = debug.gridStep > 0 ? debug.gridStep : debug.rulerBase;
-		else
-			gridStep = _gridStep;
+		const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
 
-		float startX = view.getCenter().x - view.getSize().x / 2.f;
-		float endX = startX + view.getSize().x;
+		auto gridStepSize = _viewSizeChanged ? debug.gridStep : _gridStep;
 
-		float startY = view.getCenter().y - view.getSize().y / 2.f;
-		float endY = startY + view.getSize().y;
+		sf::Vector2f start = view.getCenter() - view.getSize() / 2.f;
+		sf::Vector2f end = start + view.getSize();
 
-		auto screenSizeRatio = std::max(view.getSize().x / window.getSize().x, view.getSize().y / window.getSize().y);
+		if (_viewSizeChanged)
+			while ((end.x - start.x) / gridStepSize > debug.gridDensity)
+			{
+				gridStepSize *= debug.gridStep;
+			}
 
-		while ((endX - startX) / gridStep > debug.gridStep)
+		_gridStep = gridStepSize;
+
+		int scaleDiff = guiScaleDiff or 1;
+
+		if (view.getRotation() != 0.f)
 		{
-			gridStep *= 4;
+
+			auto center = as<point>(view.getCenter());
+			auto quadix = wykobi::make_quadix(wykobi::make_rectangle(as<point>(start), as<point>(end)));
+			auto aabb = wykobi::aabb(wykobi::rotate(view.getRotation(), quadix, center));
+			start = as<sf::Vector2f>(aabb[0]);
+			end = as<sf::Vector2f>(aabb[1]);
 		}
 
-		_gridStep = gridStep;
-
-		startX -= std::fmodf(startX, gridStep) + gridStep;
-		startY -= std::fmodf(startY, gridStep) + gridStep;
+		start.x -= std::fmodf(start.x, gridStepSize) + gridStepSize;
+		start.y -= std::fmodf(start.y, gridStepSize) + gridStepSize;
 
 		int i = 0;
-		for (float x = startX; x < endX; x += gridStep)
+		for (float x = start.x; x < end.x; x += gridStepSize)
 		{
-			vertices[i++] = sf::Vertex { { x, startY }, vertexColor };
-			vertices[i++] = sf::Vertex { { x, endY }, vertexColor };
+			vertices[i++] = sf::Vertex { { x, start.y }, vertexColor };
+			vertices[i++] = sf::Vertex { { x, end.y }, vertexColor };
 		}
 
 		window.draw(vertices, i, sf::PrimitiveType::Lines);
-		print(gridStep, screenSizeRatio);
 
 		i = 0;
-		for (float y = startY; y < endY; y += gridStep)
+		for (float y = start.y; y < end.y; y += gridStepSize)
 		{
-			vertices[i++] = sf::Vertex { { startX, y }, vertexColor };
-			vertices[i++] = sf::Vertex { { endX, y }, vertexColor };
+			vertices[i++] = sf::Vertex { { start.x, y }, vertexColor };
+			vertices[i++] = sf::Vertex { { end.x, y }, vertexColor };
 		}
 		window.draw(vertices, i, sf::PrimitiveType::Lines);
 	}
