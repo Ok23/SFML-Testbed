@@ -9,6 +9,7 @@ using Key = sf::Keyboard::Key;
 struct Hotkey : public sf::Event::KeyEvent
 {
 	Hotkey(sf::Keyboard::Key key, bool alt = false, bool control = false, bool shift = false, bool system = false) : sf::Event::KeyEvent { key, alt, control, shift, system }{};
+	Hotkey(sf::Event::KeyEvent key) : sf::Event::KeyEvent(key) {};
 	bool operator == (sf::Event::KeyEvent key) { return key.code == code and key.alt == alt and key.control == control and key.shift == shift and key.system == system; };
 	bool operator != (sf::Event::KeyEvent key) { return key.code != code or key.alt != alt or key.control != control or key.shift != shift or key.system != system; };
 	bool operator == (Hotkey key) { return key.code == code and key.alt == alt and key.control == control and key.shift == shift and key.system == system; };
@@ -21,16 +22,17 @@ class Testbed
 public:
 	struct DebugSettings
 	{
-		Hotkey toggleGridHotkey {sf::Keyboard::Key::G, false, true};
-		Hotkey toggleViewportHotkey {sf::Keyboard::Key::V, false, true};
-		Hotkey toggleInfoHotkey {sf::Keyboard::Key::I, false, true};
-		Hotkey beginRulerHotkey {sf::Keyboard::Key::L};
+		Hotkey toggleGridHotkey { sf::Keyboard::Key::G, false, true };
+		Hotkey toggleViewportHotkey { sf::Keyboard::Key::V, false, true };
+		Hotkey toggleInfoHotkey { sf::Keyboard::Key::I, false, true };
+		Hotkey resetViewHotkey { sf::Keyboard::Key::R, false, true };
+		Hotkey beginRulerHotkey { sf::Keyboard::Key::L };
 		size_t rulerBase = 100;
 		size_t gridDensity = 32;
 		float maxViewSize = 1e6f;
 		float minViewSize = 1e-2f;
 		float gridStep = 4.f;
-		float cameraSpeed = 0.1f;
+		float cameraKeyboardSpeed = 0.1f;
 		float cameraZoomSpeed = 1.f + (1.f / 3.f);
 		sf::Uint8 gridOpaque = 64;
 		bool drawGrid = true;
@@ -50,7 +52,6 @@ protected:
 	virtual void load();
 	virtual void update(const sf::Time delta);
 	virtual void draw();
-
 	virtual void onEvent(const sf::Event event);
 	virtual void onKey(const sf::Event::KeyEvent key, bool pressed);
 	virtual void onMouseButton(const sf::Event::MouseButtonEvent button, bool pressed);
@@ -61,7 +62,9 @@ protected:
 	virtual void onGainedFocus();
 	virtual void onResized(sf::Event::SizeEvent size);
 	virtual void onTextEntered(const sf::Event::TextEvent text);
-	virtual void onClose();
+	/// @brief Called when window close button pressed
+	/// @return If true close window
+	virtual bool onExitEvent();
 
 	void resetViewport();
 	void blockCurFrameControl();
@@ -87,13 +90,12 @@ private:
 	bool blockControlCurFrame;
 
 	sf::Vector2f _cameraMousePixelCoord;
-	sf::Vector2f _viewSize;
-	sf::Vector2i _rulerStart;
 	sf::Vector2f _rulerWorldStart;
+	sf::Vector2i _rulerStart;
 	float _previousTargetZoom;
 	float _gridStep;
 	float _rulerLength;
-	bool _viewSizeChanged;
+	bool _viewZoomLevelChanged;
 	bool _screenRuler;
 	bool _guiViewApplied;
 };

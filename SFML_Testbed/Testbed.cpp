@@ -18,7 +18,7 @@ using point = wykobi::point2d<float>;
 
 
 Testbed::Testbed(sf::Vector2u windowSize, std::string_view title)
-	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
+	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewZoomLevelChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
@@ -29,7 +29,7 @@ int Testbed::run()
 {
 	if (isRunning)
 	{
-		return 1;
+		return -1;
 	}
 	else
 	{
@@ -52,8 +52,8 @@ int Testbed::run()
 			switch (event.type)
 			{
 			case sf::Event::Closed:
-				onClose();
-				window.close();
+				if (onExitEvent())
+					window.close();
 				break;
 			case sf::Event::KeyPressed:
 				onKey(event.key, true);
@@ -113,10 +113,13 @@ int Testbed::run()
 		window.display();
 
 		blockControlCurFrame = false;
-		_viewSizeChanged = false;
+		_viewZoomLevelChanged = false;
 	}
 	ImGui::SFML::Shutdown();
-
+	{
+		_viewZoomLevelChanged = true;
+	}
+	isRunning = false;
 	return 0;
 }
 
@@ -143,7 +146,7 @@ void Testbed::onLostFocus() {}
 void Testbed::onGainedFocus() {}
 void Testbed::onResized(sf::Event::SizeEvent size) {}
 void Testbed::onTextEntered(const sf::Event::TextEvent text) {}
-void Testbed::onClose() {}
+bool Testbed::onExitEvent() { return true; }
 
 void Testbed::resetViewport()
 {
@@ -152,7 +155,7 @@ void Testbed::resetViewport()
 	view.setCenter(sf::Vector2f { window.getSize().x / 2.f, window.getSize().y / 2.f });
 	view.setRotation(0);
 	window.setView(view);
-	_viewSizeChanged = true;
+	_viewZoomLevelChanged = true;
 }
 
 void Testbed::blockCurFrameControl()
@@ -180,12 +183,14 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 		return;
 
 	// Hotkeys
-	if (debug.toggleGridHotkey == key and pressed) 
+	if (debug.toggleGridHotkey == key and pressed)
 		debug.drawGrid = debug.drawGrid ? false : true;
 	else if (debug.toggleViewportHotkey == key and pressed)
 		debug.drawViewport = debug.drawViewport ? false : true;
 	else if (debug.toggleInfoHotkey == key and pressed)
 		debug.drawInfo = debug.drawInfo ? false : true;
+	else if (debug.resetViewHotkey == key and pressed)
+		resetViewport();
 	else if (debug.beginRulerHotkey == key)
 	{
 		if (!pressed)
@@ -200,26 +205,6 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 			//window.setView(view);
 		}
 	}
-	if (key.code == sf::Keyboard::R and key.control and pressed)
-	{
-		resetViewport();
-	}
-
-	//if (key.code == sf::Keyboard::L)
-	//{
-	//	if (!pressed)
-	//		_screenRuler = false;
-	//	else if (_screenRuler == false)
-	//	{
-	//		auto view = window.getView();
-	//		//window.setView(getGuiView());
-	//		_rulerStart = sf::Mouse::getPosition(window);
-	//		_rulerWorldStart = window.mapPixelToCoords(_rulerStart);
-	//		_screenRuler = true;
-	//		//window.setView(view);
-	//	}
-
-	//}
 
 }
 
@@ -228,12 +213,8 @@ void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
 	if (button.button == sf::Mouse::Middle and pressed) // Save mouse coords for shift
-	{
 		if (debug.cameraControl)
-		{
 			_cameraMousePixelCoord = window.mapPixelToCoords(sf::Mouse::getPosition());
-		}
-	}
 }
 
 void Testbed::internalEventHandler(const sf::Event event)
@@ -253,7 +234,6 @@ void Testbed::internalEventHandler(const sf::Event event)
 		view.setCenter(view.getCenter() + (view.getSize() - oldViewSize) / 2.f);
 
 		window.setView(view);
-
 	}
 	else if (event.type == sf::Event::MouseMoved) // Update mousePos
 	{
@@ -261,7 +241,7 @@ void Testbed::internalEventHandler(const sf::Event event)
 	}
 	else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame) // Zoom when mouse scroll view
 	{
-		_viewSizeChanged = true;
+		_viewZoomLevelChanged = true;
 		sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
 
 		const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
@@ -282,7 +262,6 @@ void Testbed::internalEventHandler(const sf::Event event)
 		const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
 		const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
 		view.move(offsetCoords);
-		//_rulerStart -= offsetCoords;
 		window.setView(view);
 
 	}
@@ -298,7 +277,7 @@ void Testbed::internalUpdateHandler()
 		auto viewSize = window.getView().getSize();
 		if (window.hasFocus() and debug.keyboardCameraControl and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
 		{
-			float speed = debug.cameraSpeed * (debug.cameraSpeed * std::min(viewSize.x, viewSize.y));
+			float speed = debug.cameraKeyboardSpeed * (debug.cameraKeyboardSpeed * std::min(viewSize.x, viewSize.y));
 
 			sf::Vector2f direction;
 			bool leftKey = Keyboard::isKeyPressed(Keys::Left);
@@ -307,27 +286,15 @@ void Testbed::internalUpdateHandler()
 			bool downKey = Keyboard::isKeyPressed(Keys::Down);
 
 			if (leftKey)
-			{
 				direction.x = -speed;
-			}
 			else if (rightKey)
-			{
 				direction.x = speed;
-			}
-
 			if (upKey)
-			{
 				direction.y = -speed;
-			}
 			else if (downKey)
-			{
 				direction.y = speed;
-			}
-
 			if ((leftKey or rightKey) and (upKey or downKey))
-			{
 				direction / 2.f;
-			}
 
 			view.move(direction);
 			window.setView(view);
@@ -336,11 +303,6 @@ void Testbed::internalUpdateHandler()
 		{
 			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
-
-			//// Screen ruler
-			//{ // TODO: some text
-			//	_rulerStart -= shift * getGuiView().getSize().x / view.getSize().x;
-			//}
 
 			view.setCenter((view.getCenter() + shift));
 			window.setView(view);
@@ -355,10 +317,11 @@ void Testbed::internalDrawHandler()
 	static sf::Vertex vertices[512];
 	static std::ostringstream scaleFormatStr {};
 	static char textBuf[32];
-	auto view = window.getView();
+	sf::View view = window.getView();
 	sf::View guiView = getGuiView();
-	scaleFormatStr.str("");
+	const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
 
+	scaleFormatStr.str("");
 	text.setCharacterSize(10);
 	text.setFont(defaultFont);
 
@@ -368,10 +331,6 @@ void Testbed::internalDrawHandler()
 	// Draw ruler
 	if (_screenRuler)
 	{
-		sf::Vector2f toPos = window.mapPixelToCoords(sf::Mouse::getPosition());
-		const float scaleDiff = guiView.getSize().x / view.getSize().x;
-
-
 		window.setView(guiView);
 
 		//auto relativeToGui = (_rulerWorldStart - );
@@ -381,27 +340,20 @@ void Testbed::internalDrawHandler()
 		vertices[1].position = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 		auto angle = wykobi::cartesian_angle(as<point>(vertices[0].position), as<point>(mousePos));
 
-		vertices[2].position = vertices[0].position + sf::Vector2f { 0.f, 5.f };
-		vertices[3].position = vertices[0].position + sf::Vector2f { 0.f, -5.f };
+		vertices[2].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f, 5.f }), as<point>(vertices[0].position)));
+		vertices[3].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f, -5.f }), as<point>(vertices[0].position)));
 
-		vertices[4].position = vertices[1].position + sf::Vector2f { 0.f, 5.f };
-		vertices[5].position = vertices[1].position + sf::Vector2f { 0.f, -5.f };
-
-		vertices[2].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[2].position), as<point>(vertices[0].position)));
-		vertices[3].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[3].position), as<point>(vertices[0].position)));
-
-		vertices[4].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[4].position), as<point>(vertices[1].position)));
-		vertices[5].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[5].position), as<point>(vertices[1].position)));
+		vertices[4].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[1].position + sf::Vector2f { 0.f, 5.f }), as<point>(vertices[1].position)));
+		vertices[5].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[1].position + sf::Vector2f { 0.f, -5.f }), as<point>(vertices[1].position)));
 
 		// Dynamic points on ruler
 		auto absoluteDistance = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position));
-		auto relativeDistance = absoluteDistance / scaleDiff;
+		auto relativeDistance = absoluteDistance / guiScaleDiff;
 
 		auto segmentsInterval = debug.rulerBase;
 		size_t segmentsCount = relativeDistance / segmentsInterval;
 		float segmentIntervalRatio = (segmentsCount / absoluteDistance);
 
-		print(scaleDiff, segmentsInterval / absoluteDistance);
 		while (segmentIntervalRatio > 0.1f) // Auto scale points interval
 		{
 			segmentsInterval *= 2;
@@ -409,22 +361,22 @@ void Testbed::internalDrawHandler()
 			segmentIntervalRatio = (segmentsCount / absoluteDistance);
 		}
 		size_t verticeShift = 6;
-		for (size_t i = 0; i < segmentsCount; ++i)
+		for (size_t i = 1; i < segmentsCount + 1; ++i)
 		{
-			float pointShift = (segmentsInterval * (i + 1)) * scaleDiff;
-			vertices[verticeShift].position = vertices[0].position + sf::Vector2f { 0.f - pointShift, 3.0f };
-			vertices[verticeShift + 1].position = vertices[0].position + sf::Vector2f { 0.f - pointShift, -3.0f };
+			float pointShift = (segmentsInterval * i) * guiScaleDiff;
+			vertices[verticeShift].position = 
+				as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f - pointShift, 3.0f }), as<point>(vertices[0].position)));
 
-			vertices[verticeShift].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[verticeShift].position), as<point>(vertices[0].position)));
-			vertices[verticeShift + 1].position = as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[verticeShift + 1].position), as<point>(vertices[0].position)));
+			vertices[verticeShift + 1].position = 
+				as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f - pointShift, -3.0f }), as<point>(vertices[0].position)));
 
-			vertices[verticeShift].color = { 229, 231, 252, 200 };
-			vertices[verticeShift + 1].color = { 229, 231, 252, 200 };
+			vertices[verticeShift].color = { 229, 231, 252, 255 };
+			vertices[verticeShift + 1].color = { 229, 231, 252, 255 };
 			verticeShift += 2;
 		}
 		//
 
-		auto length = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position)) / scaleDiff;
+		auto length = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position)) / guiScaleDiff;
 		scaleFormatStr << (length > 1 ? std::round(length) : length) << " - " << '\n' << segmentsInterval << " px.";
 		text.setString(scaleFormatStr.str());
 		scaleFormatStr.str("");
@@ -448,8 +400,6 @@ void Testbed::internalDrawHandler()
 		const sf::Vector2f initialPos = guiView.getSize() - sf::Vector2f { 30.f, 30.f };
 		const size_t maxLength = 250;
 		const size_t minLength = 50;
-
-		const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
 
 		float rulerDynamicSize =
 			debug.rulerBase * (guiScaleDiff);
@@ -531,14 +481,12 @@ void Testbed::internalDrawHandler()
 	{
 		sf::Color vertexColor { 71, 71, 71, debug.gridOpaque };
 
-		const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
-
-		auto gridStepSize = _viewSizeChanged ? debug.gridStep : _gridStep;
+		auto gridStepSize = _viewZoomLevelChanged ? debug.gridStep : _gridStep;
 
 		sf::Vector2f start = view.getCenter() - view.getSize() / 2.f;
 		sf::Vector2f end = start + view.getSize();
 
-		if (_viewSizeChanged)
+		if (_viewZoomLevelChanged)
 			while ((end.x - start.x) / gridStepSize > debug.gridDensity)
 			{
 				gridStepSize *= debug.gridStep;
@@ -546,11 +494,8 @@ void Testbed::internalDrawHandler()
 
 		_gridStep = gridStepSize;
 
-		int scaleDiff = guiScaleDiff or 1;
-
 		if (view.getRotation() != 0.f)
 		{
-
 			auto center = as<point>(view.getCenter());
 			auto quadix = wykobi::make_quadix(wykobi::make_rectangle(as<point>(start), as<point>(end)));
 			auto aabb = wykobi::aabb(wykobi::rotate(view.getRotation(), quadix, center));
@@ -567,7 +512,6 @@ void Testbed::internalDrawHandler()
 			vertices[i++] = sf::Vertex { { x, start.y }, vertexColor };
 			vertices[i++] = sf::Vertex { { x, end.y }, vertexColor };
 		}
-
 		window.draw(vertices, i, sf::PrimitiveType::Lines);
 
 		i = 0;
