@@ -5,6 +5,34 @@
 
 using Key = sf::Keyboard::Key;
 
+class VertexDrawQueue
+{
+protected:
+	struct BatchHeader
+	{
+		sf::RenderStates state;
+		sf::PrimitiveType type;
+		uint32_t size;
+	};
+	static constexpr size_t VertexSize = sizeof(sf::Vertex);
+	static constexpr size_t HeaderSize = sizeof(BatchHeader);
+	static constexpr size_t MemoryExpandMultiplier = 2;
+private:
+	char * memory;
+	size_t memorySize;
+	size_t batchCount;
+	size_t headBatchOffset;
+	void extendMemory(size_t size);
+	void copyVerticesBlock(const sf::Vertex * const vertices, size_t count);
+public:
+	VertexDrawQueue();
+	VertexDrawQueue(size_t initialMemorySize);
+	~VertexDrawQueue();
+	sf::Vertex * allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
+	void add(const sf::Vertex * const vertices, size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
+	void draw(sf::RenderTarget & target, bool resetQueue = true);
+	void reset();
+};
 
 struct Hotkey : public sf::Event::KeyEvent
 {
@@ -44,10 +72,9 @@ public:
 		bool inputControl = true;
 	};
 
-	Testbed(sf::Vector2u windowSize = { 800, 600 }, std::string_view title = "Testbed");
+	Testbed(sf::VideoMode videoMode = { 800, 600 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings{ 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
+	const sf::Window & getWindow() const;
 	int run();
-	const sf::Vector2u & getWindowSize() const;
-	const std::string_view getTitle() const;
 protected:
 	virtual void load();
 	virtual void update(const sf::Time delta);
@@ -72,7 +99,8 @@ protected:
 
 	sf::RenderWindow window;
 	DebugSettings debug;
-	sf::View getGuiView();
+	sf::View getGuiView() const;
+	float getWindowRelativeSizeDiff() const;
 private:
 	void internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed);
 	void internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed);
@@ -80,22 +108,26 @@ private:
 	void internalUpdateHandler();
 	void internalDrawHandler();
 
-	sf::Vector2u windowSize;
 	sf::Vector2i mousePos;
-	std::string title;
 	const sf::Clock runTime;
 	sf::Clock delta;
 	sf::Font defaultFont;
 	bool isRunning;
 	bool blockControlCurFrame;
 
+	sf::VideoMode videoMode;
+	sf::String windowTitle;
+	sf::Uint32 windowStyle;
+	sf::ContextSettings windowContext;
+
+	sf::Vector2f _prevFrameViewSize;
 	sf::Vector2f _cameraMousePixelCoord;
 	sf::Vector2f _rulerWorldStart;
 	sf::Vector2i _rulerStart;
 	float _previousTargetZoom;
 	float _gridStep;
 	float _rulerLength;
-	bool _viewZoomLevelChanged;
+	bool _viewSizeChanged;
 	bool _screenRuler;
 	bool _guiViewApplied;
 };

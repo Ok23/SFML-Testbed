@@ -1,42 +1,34 @@
 #include "pch.h"
 #include "Testbed.h"
-#include <algorithm>
-#include <numeric>
-#include <wykobi/wykobi.hpp>
-#include <wykobi/wykobi_utilities.hpp>
 #pragma warning(disable: 26451)
-
-
-template<typename To, typename From>
-static To as(From && from)
-{
-	return *((To *)&from);
-}
 
 using vec = wykobi::vector2d<float>;
 using point = wykobi::point2d<float>;
 
 
-Testbed::Testbed(sf::Vector2u windowSize, std::string_view title)
-	: window(), windowSize(windowSize), title(title), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewZoomLevelChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
+
+Testbed::Testbed(sf::VideoMode videoMode, std::string_view title, sf::ContextSettings windowSettings, sf::Uint32 windowStyle)
+	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
 }
 
+const sf::Window & Testbed::getWindow() const
+{
+	return window;
+}
 
 int Testbed::run()
 {
+
 	if (isRunning)
 	{
 		return -1;
 	}
 	else
 	{
-		sf::VideoMode videoMode { windowSize.x, windowSize.y };
-		sf::ContextSettings context;
-		context.antialiasingLevel = 2;
-		window.create(videoMode, title, sf::Style::Default, context);
+		window.create(videoMode, windowTitle, windowStyle, windowContext);
 		isRunning = true;
 	}
 	ImGui::SFML::Init(window, true);
@@ -56,26 +48,45 @@ int Testbed::run()
 					window.close();
 				break;
 			case sf::Event::KeyPressed:
-				onKey(event.key, true);
-				internalKeyEventHandler(event.key, true);
+				if (window.hasFocus())
+				{
+					onKey(event.key, true);
+					internalKeyEventHandler(event.key, true);
+				}
 				break;
 			case sf::Event::KeyReleased:
-				onKey(event.key, false);
-				internalKeyEventHandler(event.key, false);
+				if (window.hasFocus())
+				{
+					onKey(event.key, false);
+					internalKeyEventHandler(event.key, false);
+				}
 				break;
 			case sf::Event::MouseButtonPressed:
-				onMouseButton(event.mouseButton, true);
-				internalMouseButtonEventHandler(event.mouseButton, true);
+				if (window.hasFocus())
+				{
+					onMouseButton(event.mouseButton, true);
+					internalMouseButtonEventHandler(event.mouseButton, true);
+				}
 				break;
 			case sf::Event::MouseButtonReleased:
-				onMouseButton(event.mouseButton, false);
-				internalMouseButtonEventHandler(event.mouseButton, false);
+				if (window.hasFocus())
+				{
+
+					onMouseButton(event.mouseButton, false);
+					internalMouseButtonEventHandler(event.mouseButton, false);
+				}
 				break;
 			case sf::Event::MouseWheelScrolled:
-				onMouseWheel(event.mouseWheelScroll);
+				if (window.hasFocus())
+				{
+					onMouseWheel(event.mouseWheelScroll);
+				}
 				break;
 			case sf::Event::MouseMoved:
-				onMouseMoved(event.mouseMove);
+				if (window.hasFocus())
+				{
+					onMouseMoved(event.mouseMove);
+				}
 				break;
 			case sf::Event::MouseEntered:
 				onMouseEntered();
@@ -87,50 +98,53 @@ int Testbed::run()
 				onGainedFocus();
 				break;
 			case sf::Event::Resized:
-				windowSize = window.getSize();
 				onResized(event.size);
 				break;
 			case sf::Event::TextEntered:
-				onTextEntered(event.text);
+				if (window.hasFocus())
+				{
+					onTextEntered(event.text);
+				}
 				break;
 			default:
 				break;
 			}
+
 		}
 
 		auto dt = delta.restart();
 		ImGui::SFML::Update(window, dt);
 
 		update(delta.restart());
-		internalUpdateHandler();
+		if (_prevFrameViewSize != window.getView().getSize())
+		{
+			_prevFrameViewSize = window.getView().getSize();
+			_viewSizeChanged = true;
+		}
+		if (window.hasFocus())
+			internalUpdateHandler();
 
 		window.clear();
 
 		draw();
+		if (_prevFrameViewSize != window.getView().getSize())
+		{
+			_prevFrameViewSize = window.getView().getSize();
+			_viewSizeChanged = true;
+		}
 		internalDrawHandler();
-
 		ImGui::SFML::Render(window);
 		window.display();
 
 		blockControlCurFrame = false;
-		_viewZoomLevelChanged = false;
+		_viewSizeChanged = false;
 	}
-	ImGui::SFML::Shutdown();
+	//ImGui::SFML::Shutdown();
 	{
-		_viewZoomLevelChanged = true;
+		_viewSizeChanged = true;
 	}
 	isRunning = false;
 	return 0;
-}
-
-const sf::Vector2u & Testbed::getWindowSize() const
-{
-	return windowSize;
-}
-
-const std::string_view Testbed::getTitle() const
-{
-	return title;
 }
 
 void Testbed::load() {}
@@ -155,7 +169,7 @@ void Testbed::resetViewport()
 	view.setCenter(sf::Vector2f { window.getSize().x / 2.f, window.getSize().y / 2.f });
 	view.setRotation(0);
 	window.setView(view);
-	_viewZoomLevelChanged = true;
+	_viewSizeChanged = true;
 }
 
 void Testbed::blockCurFrameControl()
@@ -168,13 +182,18 @@ const sf::Vector2i Testbed::getMousePos() const
 	return mousePos;
 }
 
-sf::View Testbed::getGuiView()
+sf::View Testbed::getGuiView() const
 {
 	sf::View guiView = window.getView();
 	guiView.setSize({ (float)window.getSize().x, (float)window.getSize().y });
 	guiView.setCenter(guiView.getSize() / 2.f);
 	guiView.setRotation(0);
 	return guiView;
+}
+
+float Testbed::getWindowRelativeSizeDiff() const
+{
+	return window.getSize().x / window.getView().getSize().x;
 }
 
 void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
@@ -206,6 +225,7 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 		}
 	}
 
+
 }
 
 void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed)
@@ -224,7 +244,7 @@ void Testbed::internalEventHandler(const sf::Event event)
 	{
 		sf::Vector2f oldViewSize = view.getSize();
 		float zoomLevel;
-		if (windowSize.x != event.size.width)
+		if (window.getSize().x != event.size.width)
 			zoomLevel = view.getSize().y / window.getSize().y;
 		else
 			zoomLevel = view.getSize().x / window.getSize().x;
@@ -233,38 +253,47 @@ void Testbed::internalEventHandler(const sf::Event event)
 		view.setSize(view.getSize() * (zoomLevel));
 		view.setCenter(view.getCenter() + (view.getSize() - oldViewSize) / 2.f);
 
+		_viewSizeChanged = true;
 		window.setView(view);
 	}
-	else if (event.type == sf::Event::MouseMoved) // Update mousePos
+	else
 	{
-		mousePos = { event.mouseMove.x, event.mouseMove.y };
-	}
-	else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame) // Zoom when mouse scroll view
-	{
-		_viewZoomLevelChanged = true;
-		sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
-
-		const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
-		sf::View view { window.getView() };
-
-		if (event.mouseWheelScroll.delta < 0)
+		if (window.hasFocus())
 		{
-			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
-				view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
-		}
-		else
-		{
-			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
-				view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
-		}
+			if (event.type == sf::Event::MouseMoved) // Update mousePos
+			{
 
-		window.setView(view);
-		const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
-		const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
-		view.move(offsetCoords);
-		window.setView(view);
+				mousePos = { event.mouseMove.x, event.mouseMove.y };
+			}
+			else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame) // Zoom when mouse scroll view
+			{
+				_viewSizeChanged = true;
+				sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
 
+				const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
+				sf::View view { window.getView() };
+
+				if (event.mouseWheelScroll.delta < 0)
+				{
+					if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
+						view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
+				}
+				else
+				{
+					if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
+						view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
+				}
+
+				window.setView(view);
+				const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
+				const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
+				view.move(offsetCoords);
+				window.setView(view);
+
+			}
+		}
 	}
+
 }
 
 void Testbed::internalUpdateHandler()
@@ -313,13 +342,13 @@ void Testbed::internalUpdateHandler()
 
 void Testbed::internalDrawHandler()
 {
-	static sf::Text text;
-	static sf::Vertex vertices[512];
-	static std::ostringstream scaleFormatStr {};
-	static char textBuf[32];
+	sf::Text text;
+	sf::Vertex vertices[512];
+	std::ostringstream scaleFormatStr {};
+	char textBuf[32];
 	sf::View view = window.getView();
 	sf::View guiView = getGuiView();
-	const float guiScaleDiff = guiView.getSize().x / view.getSize().x;
+	const float guiScaleDiff = getWindowRelativeSizeDiff();
 
 	scaleFormatStr.str("");
 	text.setCharacterSize(10);
@@ -350,24 +379,26 @@ void Testbed::internalDrawHandler()
 		auto absoluteDistance = wykobi::distance(as<point>(vertices[0].position), as<point>(vertices[1].position));
 		auto relativeDistance = absoluteDistance / guiScaleDiff;
 
-		auto segmentsInterval = debug.rulerBase;
-		size_t segmentsCount = relativeDistance / segmentsInterval;
-		float segmentIntervalRatio = (segmentsCount / absoluteDistance);
+		float segmentsInterval = debug.rulerBase;
 
-		while (segmentIntervalRatio > 0.1f) // Auto scale points interval
+		while (segmentsInterval * guiScaleDiff < 10)
 		{
 			segmentsInterval *= 2;
-			segmentsCount = relativeDistance / segmentsInterval;
-			segmentIntervalRatio = (segmentsCount / absoluteDistance);
 		}
+		while (segmentsInterval * guiScaleDiff > 100)
+		{
+			segmentsInterval /= 2;
+		}
+		size_t segmentsCount = relativeDistance / segmentsInterval;
+
 		size_t verticeShift = 6;
 		for (size_t i = 1; i < segmentsCount + 1; ++i)
 		{
 			float pointShift = (segmentsInterval * i) * guiScaleDiff;
-			vertices[verticeShift].position = 
+			vertices[verticeShift].position =
 				as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f - pointShift, 3.0f }), as<point>(vertices[0].position)));
 
-			vertices[verticeShift + 1].position = 
+			vertices[verticeShift + 1].position =
 				as<sf::Vector2f>(wykobi::rotate(angle, as<point>(vertices[0].position + sf::Vector2f { 0.f - pointShift, -3.0f }), as<point>(vertices[0].position)));
 
 			vertices[verticeShift].color = { 229, 231, 252, 255 };
@@ -412,7 +443,6 @@ void Testbed::internalDrawHandler()
 
 
 		scaleFormatStr << (rulerWorldLength > 1 ? std::round(rulerWorldLength) : rulerWorldLength) << " px";
-
 
 		vertices[0] = sf::Vertex { { initialPos.x, initialPos.y }, sf::Color { 229, 231, 252, 255 } };
 		vertices[1] = sf::Vertex { { initialPos.x - rulerScreenLength, initialPos.y }, sf::Color { 229, 231, 252, 255 } };
@@ -481,18 +511,41 @@ void Testbed::internalDrawHandler()
 	{
 		sf::Color vertexColor { 71, 71, 71, debug.gridOpaque };
 
-		auto gridStepSize = _viewZoomLevelChanged ? debug.gridStep : _gridStep;
+		auto gridStepSize = _viewSizeChanged ? debug.gridStep : _gridStep;
 
 		sf::Vector2f start = view.getCenter() - view.getSize() / 2.f;
 		sf::Vector2f end = start + view.getSize();
-
-		if (_viewZoomLevelChanged)
-			while ((end.x - start.x) / gridStepSize > debug.gridDensity)
+		sf::FloatRect r { 100.f, 100.f, 50.f, 50.f };
+		if (_viewSizeChanged)
+		{
+			float gridBase = 100.f;
+			gridStepSize = gridBase;
+			if (guiScaleDiff <= 1.f)
 			{
-				gridStepSize *= debug.gridStep;
+				while ((end.x - start.x) / gridStepSize > debug.gridDensity)
+				{
+					gridStepSize *= debug.gridStep;
+
+				}
+
+			}
+			else
+			{
+				//while ((end.x - start.x) / gridStepSize < (guiScaleDiff / debug.gridDensity))
+				//{
+				//	gridStepSize /= debug.gridStep;
+				//}
 			}
 
-		_gridStep = gridStepSize;
+
+			//while ((end.x - start.x) / gridStepSize > debug.gridDensity)
+			//{
+			//	gridStepSize *= debug.gridStep;
+			//}
+
+			_gridStep = gridStepSize;
+		}
+
 
 		if (view.getRotation() != 0.f)
 		{
@@ -526,3 +579,66 @@ void Testbed::internalDrawHandler()
 
 
 #pragma warning(default: 26451)
+
+void VertexDrawQueue::extendMemory(size_t size)
+{
+	size *= MemoryExpandMultiplier;
+	memory = (char *)std::realloc(memory, size);
+	memorySize = size;
+}
+
+void VertexDrawQueue::copyVerticesBlock(const sf::Vertex * const vertices, size_t count)
+{
+	assert(count > 0);
+	size_t memoryBlockSize = VertexSize * count + HeaderSize;
+	if (memorySize < memoryBlockSize + memorySize)
+		extendMemory((memoryBlockSize + memorySize));
+	std::memcpy(memory + headBatchOffset + HeaderSize, vertices, VertexSize * count);
+
+	++batchCount;
+}
+
+VertexDrawQueue::VertexDrawQueue() : memory(nullptr), memorySize(0), batchCount(0), headBatchOffset(0) {}
+
+VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
+
+VertexDrawQueue::~VertexDrawQueue() { free(memory); }
+
+sf::Vertex * VertexDrawQueue::allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
+{
+	BatchHeader * head = (BatchHeader *)(memory + headBatchOffset);
+	head->type = primitive;
+	head->size = count;
+	head->state = state;
+	headBatchOffset += VertexSize * count + HeaderSize;
+	return (sf::Vertex *)(memory + headBatchOffset + HeaderSize);
+}
+
+void VertexDrawQueue::add(const sf::Vertex * const vertices, size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
+{
+	copyVerticesBlock(vertices, count);
+	BatchHeader * head = (BatchHeader *)(memory + headBatchOffset);
+	head->type = primitive;
+	head->size = count;
+	head->state = state;
+	headBatchOffset += VertexSize * count + HeaderSize;
+}
+
+void VertexDrawQueue::draw(sf::RenderTarget & target, bool resetQueue)
+{
+	BatchHeader * curBatch = (BatchHeader *)memory;
+	sf::Vertex * curVertices = (sf::Vertex *)(memory + HeaderSize);
+	for (size_t i = 0; i < batchCount; ++i)
+	{
+		target.draw(curVertices, curBatch->size, curBatch->type, curBatch->state);
+		curVertices = (sf::Vertex *)((char *)curVertices + HeaderSize + VertexSize * curBatch->size);
+		curBatch = (BatchHeader *)((char *)curBatch + curBatch->size * VertexSize + HeaderSize);
+	}
+	if (resetQueue)
+	{
+		headBatchOffset = 0;
+		batchCount = 0;
+	}
+}
+
+void VertexDrawQueue::reset() { headBatchOffset = 0; batchCount = 0; }
