@@ -57,4 +57,7 @@
   <ItemGroup>
     <Font Include="verdana.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Playground\Somefile" />
+  </ItemGroup>
 </Project>

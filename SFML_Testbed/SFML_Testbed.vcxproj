@@ -194,6 +194,9 @@
   <ItemGroup>
     <Font Include="verdana.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Playground\Somefile" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
