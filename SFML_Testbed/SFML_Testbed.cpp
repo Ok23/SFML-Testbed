@@ -10,6 +10,8 @@ class TestbedClass : public Testbed
 	sf::Texture woodFloorTexture;
 	VertexDrawQueue batch;
 protected:
+
+
 	void load() override
 	{
 		stoneFloorTexture.loadFromFile(tilesPath + "ground_stone.png");
@@ -39,7 +41,7 @@ protected:
 	}
 	void update(const sf::Time delta) override
 	{
-		std::cout << delta.asMilliseconds() << std::endl;
+
 	}
 	void onKey(const sf::Event::KeyEvent key, bool pressed) override
 	{
@@ -58,5 +60,5 @@ int main()
 
 	//constexpr auto mem1 = (char *)12 + ((char *)mem - memRaw);
 
-	//return testbed.run();
+	return testbed.run();
 }
