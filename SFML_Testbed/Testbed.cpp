@@ -111,11 +111,10 @@ int Testbed::run()
 			}
 
 		}
-
 		auto dt = delta.restart();
 		ImGui::SFML::Update(window, dt);
 
-		update(delta.restart());
+		update(dt);
 		if (_prevFrameViewSize != window.getView().getSize())
 		{
 			_prevFrameViewSize = window.getView().getSize();
@@ -139,7 +138,7 @@ int Testbed::run()
 		blockControlCurFrame = false;
 		_viewSizeChanged = false;
 	}
-	//ImGui::SFML::Shutdown();
+	ImGui::SFML::Shutdown();
 	{
 		_viewSizeChanged = true;
 	}
@@ -598,11 +597,39 @@ void VertexDrawQueue::copyVerticesBlock(const sf::Vertex * const vertices, size_
 	++batchCount;
 }
 
+
+
 VertexDrawQueue::VertexDrawQueue() : memory(nullptr), memorySize(0), batchCount(0), headBatchOffset(0) {}
 
-VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
+VertexDrawQueue::VertexDrawQueue(const VertexDrawQueue & other) : memory((char *)malloc(other.memorySize)), memorySize(other.memorySize), batchCount(other.batchCount), headBatchOffset(other.headBatchOffset)
+{
+	std::memcpy(memory, other.memory, headBatchOffset);
+}
 
-VertexDrawQueue::~VertexDrawQueue() { free(memory); }
+VertexDrawQueue::VertexDrawQueue(VertexDrawQueue && other) : memory(other.memory), memorySize(other.memorySize), batchCount(other.batchCount), headBatchOffset(other.headBatchOffset)
+{
+	other.memory = nullptr;
+}
+
+VertexDrawQueue & VertexDrawQueue::operator=(const VertexDrawQueue & other)
+{
+	memorySize = other.memorySize;
+	batchCount = other.batchCount;
+	headBatchOffset = other.headBatchOffset;
+	memory = (char *)malloc(memorySize);
+	std::memcpy(memory, other.memory, headBatchOffset);
+	return *this;
+}
+
+VertexDrawQueue & VertexDrawQueue::operator=(VertexDrawQueue && other) noexcept
+{
+	memorySize = other.memorySize;
+	batchCount = other.batchCount;
+	headBatchOffset = other.headBatchOffset;
+	memory = other.memory;
+	other.memory = nullptr;
+	return *this;
+}
 
 sf::Vertex * VertexDrawQueue::allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
 {

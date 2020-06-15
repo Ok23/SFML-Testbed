@@ -26,8 +26,13 @@ private:
 	void copyVerticesBlock(const sf::Vertex * const vertices, size_t count);
 public:
 	VertexDrawQueue();
-	VertexDrawQueue(size_t initialMemorySize);
-	~VertexDrawQueue();
+	VertexDrawQueue(const VertexDrawQueue & other);
+	VertexDrawQueue(VertexDrawQueue && other);
+	VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
+	~VertexDrawQueue() { if (memory) free(memory); }
+	VertexDrawQueue & operator = (const VertexDrawQueue & other);
+	VertexDrawQueue & operator = (VertexDrawQueue && other) noexcept;
+
 	sf::Vertex * allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
 	void add(const sf::Vertex * const vertices, size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
 	void draw(sf::RenderTarget & target, bool resetQueue = true);
