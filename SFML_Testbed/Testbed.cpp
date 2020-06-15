@@ -384,10 +384,8 @@ void Testbed::internalDrawHandler()
 		{
 			segmentsInterval *= 2;
 		}
-		while (segmentsInterval * guiScaleDiff > 100)
-		{
-			segmentsInterval /= 2;
-		}
+		// TODO Implement ruler segment interval for scale less than 1
+		
 		size_t segmentsCount = relativeDistance / segmentsInterval;
 
 		size_t verticeShift = 6;
@@ -434,12 +432,10 @@ void Testbed::internalDrawHandler()
 		float rulerDynamicSize =
 			debug.rulerBase * (guiScaleDiff);
 
-		//auto rulerScreenLength = std::max((size_t)(rulerDynamicSize) % (maxLength), minLength);
 
 		auto rulerScreenLength = std::clamp(rulerDynamicSize, (float)minLength, (float)maxLength);
 
 		auto rulerWorldLength = rulerScreenLength / guiScaleDiff;
-
 
 		scaleFormatStr << (rulerWorldLength > 1 ? std::round(rulerWorldLength) : rulerWorldLength) << " px";
 
@@ -458,7 +454,6 @@ void Testbed::internalDrawHandler()
 		auto textRect = text.getLocalBounds();
 
 		text.setPosition((size_t)((vertices[0].position.x + vertices[1].position.x) / 2.f - textRect.width / 2), vertices[0].position.y + 1);
-
 
 		window.setView(guiView);
 		window.draw(vertices, 6, sf::PrimitiveType::Lines);
@@ -517,9 +512,7 @@ void Testbed::internalDrawHandler()
 		sf::FloatRect r { 100.f, 100.f, 50.f, 50.f };
 		if (_viewSizeChanged)
 		{
-			float gridBase = 100.f;
-			gridStepSize = gridBase;
-			if (guiScaleDiff <= 1.f)
+			//if (guiScaleDiff < 1.f)
 			{
 				while ((end.x - start.x) / gridStepSize > debug.gridDensity)
 				{
@@ -528,23 +521,14 @@ void Testbed::internalDrawHandler()
 				}
 
 			}
-			else
+			// TODO: Implement grid step size for less than debug.gridStep
 			{
-				//while ((end.x - start.x) / gridStepSize < (guiScaleDiff / debug.gridDensity))
-				//{
-				//	gridStepSize /= debug.gridStep;
-				//}
+				
 			}
-
-
-			//while ((end.x - start.x) / gridStepSize > debug.gridDensity)
-			//{
-			//	gridStepSize *= debug.gridStep;
-			//}
 
 			_gridStep = gridStepSize;
 		}
-
+		print(gridStepSize);
 
 		if (view.getRotation() != 0.f)
 		{
