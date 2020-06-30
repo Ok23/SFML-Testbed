@@ -1,9 +1,10 @@
 #pragma once
 #include <string_view>
 #include <iostream>
-#include <SFML/Graphics.hpp>
+
 
 using Key = sf::Keyboard::Key;
+
 
 class VertexDrawQueue
 {
@@ -28,8 +29,8 @@ public:
 	VertexDrawQueue();
 	VertexDrawQueue(const VertexDrawQueue & other);
 	VertexDrawQueue(VertexDrawQueue && other);
-	VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
-	~VertexDrawQueue() { if (memory) free(memory); }
+	VertexDrawQueue(size_t initialMemorySize);
+	~VertexDrawQueue();
 	VertexDrawQueue & operator = (const VertexDrawQueue & other);
 	VertexDrawQueue & operator = (VertexDrawQueue && other) noexcept;
 

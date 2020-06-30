@@ -594,6 +594,16 @@ VertexDrawQueue::VertexDrawQueue(VertexDrawQueue && other) : memory(other.memory
 	other.memory = nullptr;
 }
 
+VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0)
+{
+
+}
+
+VertexDrawQueue::~VertexDrawQueue()
+{
+	if (memory) free(memory);
+}
+
 VertexDrawQueue & VertexDrawQueue::operator=(const VertexDrawQueue & other)
 {
 	memorySize = other.memorySize;

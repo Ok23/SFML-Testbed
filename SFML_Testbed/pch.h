@@ -1,10 +1,12 @@
 ﻿#pragma once
 
+#pragma warning(push, 0)
 
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <string_view>
 
 #include <pprint.hpp>
 #include <imgui/imgui.h>
@@ -14,6 +16,7 @@
 #include <wykobi/wykobi.hpp>
 #include <wykobi/wykobi_utilities.hpp>
 
+#pragma warning(pop)
 
 #if _DEBUG
 #pragma comment(lib, "sfml-system-d.lib")
