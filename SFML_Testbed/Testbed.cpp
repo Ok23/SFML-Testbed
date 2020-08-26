@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Testbed.h"
+#include <sstream>
 #pragma warning(disable: 26451)
 
 using vec = wykobi::vector2d<float>;

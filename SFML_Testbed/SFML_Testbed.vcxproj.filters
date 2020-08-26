@@ -27,22 +27,19 @@
     <ClCompile Include="Testbed.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui\imgui.cpp">
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui-sfml\imgui-SFML.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui\imgui_demo.cpp">
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\imgui_widgets.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui\imgui_draw.cpp">
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\imgui_draw.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui\misc\cpp\imgui_stdlib.cpp">
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\imgui_demo.cpp">
       <Filter>External</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui\imgui_widgets.cpp">
-      <Filter>External</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\..\..\DevLibs\imgui-sfml\imgui-SFML.cpp">
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\imgui.cpp">
       <Filter>External</Filter>
     </ClCompile>
   </ItemGroup>
@@ -56,8 +53,5 @@
   </ItemGroup>
   <ItemGroup>
     <Font Include="verdana.ttf" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Playground\Somefile" />
   </ItemGroup>
 </Project>

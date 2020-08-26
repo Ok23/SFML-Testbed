@@ -8,7 +8,6 @@
 #include <numeric>
 #include <string_view>
 
-#include <pprint.hpp>
 #include <imgui/imgui.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
 #include <imgui-sfml/imgui-SFML.h>
@@ -47,4 +46,3 @@ static To as(From && from)
 	return *((To *)&from);
 }
 
-extern pprint::PrettyPrinter printer;
