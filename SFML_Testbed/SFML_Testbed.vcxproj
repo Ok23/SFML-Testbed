@@ -194,11 +194,6 @@
   <ItemGroup>
     <Font Include="verdana.ttf" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Tiny-Framework\Tiny Framework\Tiny Framework.vcxproj">
-      <Project>{ec69b05c-d4f5-436e-93a2-12c4abff1be6}</Project>
-    </ProjectReference>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

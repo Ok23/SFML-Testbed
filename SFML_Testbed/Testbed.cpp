@@ -50,42 +50,41 @@ int Testbed::run()
 					window.close();
 				break;
 			case sf::Event::KeyPressed:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsWindowFocused())
 				{
 					onKey(event.key, true);
 					internalKeyEventHandler(event.key, true);
 				}
 				break;
 			case sf::Event::KeyReleased:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsWindowFocused())
 				{
 					onKey(event.key, false);
 					internalKeyEventHandler(event.key, false);
 				}
 				break;
 			case sf::Event::MouseButtonPressed:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseButton(event.mouseButton, true);
 					internalMouseButtonEventHandler(event.mouseButton, true);
 				}
 				break;
 			case sf::Event::MouseButtonReleased:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
-
 					onMouseButton(event.mouseButton, false);
 					internalMouseButtonEventHandler(event.mouseButton, false);
 				}
 				break;
 			case sf::Event::MouseWheelScrolled:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseWheel(event.mouseWheelScroll);
 				}
 				break;
 			case sf::Event::MouseMoved:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseMoved(event.mouseMove);
 				}
@@ -103,7 +102,7 @@ int Testbed::run()
 				onResized(event.size);
 				break;
 			case sf::Event::TextEntered:
-				if (window.hasFocus())
+				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
 				{
 					onTextEntered(event.text);
 				}
