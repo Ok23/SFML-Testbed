@@ -13,7 +13,7 @@ protected:
 	{
 		sf::RenderStates state;
 		sf::PrimitiveType type;
-		uint32_t size;
+		size_t size;
 	};
 	static constexpr size_t VertexSize = sizeof(sf::Vertex);
 	static constexpr size_t HeaderSize = sizeof(BatchHeader);
@@ -39,6 +39,7 @@ public:
 	void draw(sf::RenderTarget & target, bool resetQueue = true);
 	void reset();
 };
+
 
 struct Hotkey : public sf::Event::KeyEvent
 {
@@ -80,6 +81,7 @@ public:
 
 	Testbed(sf::VideoMode videoMode = { 800, 600 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings{ 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
 	const sf::Window & getWindow() const;
+	const sf::Font & getDefaultFont();
 	int run();
 protected:
 	virtual void load();
@@ -108,10 +110,12 @@ protected:
 	sf::View getGuiView() const;
 	float getWindowRelativeSizeDiff() const;
 private:
-	void internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed);
-	void internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed);
-	void internalEventHandler(const sf::Event event);
-	void internalUpdateHandler();
+	void internalKeyEventHandler(const sf::Event::KeyEvent key, bool pressed);
+	void internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent button, bool pressed);
+	void internalMouseMoveHandler(const sf::Event::MouseMoveEvent moved);
+	void internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelScrollEvent scrolled);
+	void internalSizeEventHandler(const sf::Event::SizeEvent size);
+	void internalUpdateHandler(const sf::Time delta);
 	void internalDrawHandler();
 
 	sf::Vector2i mousePos;
@@ -120,6 +124,8 @@ private:
 	sf::Font defaultFont;
 	bool isRunning;
 	bool blockControlCurFrame;
+	bool internalBlockMouseInput;
+	bool internalBlockKeyboadInput;
 
 	sf::VideoMode videoMode;
 	sf::String windowTitle;

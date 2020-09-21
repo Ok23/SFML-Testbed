@@ -3,13 +3,10 @@
 #include <sstream>
 #pragma warning(disable: 26451)
 
-using vec = wykobi::vector2d<float>;
-using point = wykobi::point2d<float>;
-
 
 
 Testbed::Testbed(sf::VideoMode videoMode, std::string_view title, sf::ContextSettings windowSettings, sf::Uint32 windowStyle)
-	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
+	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), internalBlockKeyboadInput(false), internalBlockMouseInput(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
@@ -18,6 +15,11 @@ Testbed::Testbed(sf::VideoMode videoMode, std::string_view title, sf::ContextSet
 const sf::Window & Testbed::getWindow() const
 {
 	return window;
+}
+
+const sf::Font & Testbed::getDefaultFont()
+{
+	return defaultFont;
 }
 
 int Testbed::run()
@@ -42,7 +44,8 @@ int Testbed::run()
 		{
 			ImGui::SFML::ProcessEvent(event);
 			onEvent(event);
-			internalEventHandler(event);
+			internalBlockKeyboadInput = ImGui::IsAnyWindowFocused();
+			internalBlockMouseInput = ImGui::IsAnyWindowFocused();
 			switch (event.type)
 			{
 			case sf::Event::Closed:
@@ -50,43 +53,51 @@ int Testbed::run()
 					window.close();
 				break;
 			case sf::Event::KeyPressed:
-				if (window.hasFocus() and !ImGui::IsWindowFocused())
+				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
 				{
 					onKey(event.key, true);
-					internalKeyEventHandler(event.key, true);
+					if (!internalBlockKeyboadInput)
+						internalKeyEventHandler(event.key, true);
 				}
 				break;
 			case sf::Event::KeyReleased:
-				if (window.hasFocus() and !ImGui::IsWindowFocused())
+				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
 				{
 					onKey(event.key, false);
-					internalKeyEventHandler(event.key, false);
+					if (!internalBlockKeyboadInput)
+						internalKeyEventHandler(event.key, false);
 				}
 				break;
 			case sf::Event::MouseButtonPressed:
 				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseButton(event.mouseButton, true);
-					internalMouseButtonEventHandler(event.mouseButton, true);
+					if (!internalBlockMouseInput)
+						internalMouseButtonEventHandler(event.mouseButton, true);
 				}
 				break;
 			case sf::Event::MouseButtonReleased:
 				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseButton(event.mouseButton, false);
-					internalMouseButtonEventHandler(event.mouseButton, false);
+					if (!internalBlockMouseInput)
+						internalMouseButtonEventHandler(event.mouseButton, false);
 				}
 				break;
 			case sf::Event::MouseWheelScrolled:
 				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseWheel(event.mouseWheelScroll);
+					if (!internalBlockMouseInput)
+						internalMouseWhellScrollEventHandler(event.mouseWheelScroll);
 				}
 				break;
 			case sf::Event::MouseMoved:
 				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
 				{
 					onMouseMoved(event.mouseMove);
+					if (!internalBlockMouseInput)
+						internalMouseMoveHandler(event.mouseMove);
 				}
 				break;
 			case sf::Event::MouseEntered:
@@ -122,11 +133,11 @@ int Testbed::run()
 			_viewSizeChanged = true;
 		}
 		if (window.hasFocus())
-			internalUpdateHandler();
+			internalUpdateHandler(dt);
 
 		draw();
 		if (_prevFrameViewSize != window.getView().getSize())
-		{ 
+		{
 			_prevFrameViewSize = window.getView().getSize();
 			_viewSizeChanged = true;
 		}
@@ -194,20 +205,23 @@ float Testbed::getWindowRelativeSizeDiff() const
 	return window.getSize().x / window.getView().getSize().x;
 }
 
-void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
+void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool pressed)
 {
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
 
 	// Hotkeys
-	if (debug.toggleGridHotkey == key and pressed)
-		debug.drawGrid = debug.drawGrid ? false : true;
-	else if (debug.toggleViewportHotkey == key and pressed)
-		debug.drawViewport = debug.drawViewport ? false : true;
-	else if (debug.toggleInfoHotkey == key and pressed)
-		debug.drawInfo = debug.drawInfo ? false : true;
-	else if (debug.resetViewHotkey == key and pressed)
-		resetViewport();
+	if (pressed)
+	{
+		if (debug.toggleGridHotkey == key)
+			debug.drawGrid = debug.drawGrid ? false : true;
+		else if (debug.toggleViewportHotkey == key)
+			debug.drawViewport = debug.drawViewport ? false : true;
+		else if (debug.toggleInfoHotkey == key)
+			debug.drawInfo = debug.drawInfo ? false : true;
+		else if (debug.resetViewHotkey == key)
+			resetViewport();
+	}
 	else if (debug.beginRulerHotkey == key)
 	{
 		if (!pressed)
@@ -226,7 +240,7 @@ void Testbed::internalKeyEventHandler(sf::Event::KeyEvent key, bool pressed)
 
 }
 
-void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button, bool pressed)
+void Testbed::internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent button, bool pressed)
 {
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
@@ -235,66 +249,58 @@ void Testbed::internalMouseButtonEventHandler(sf::Event::MouseButtonEvent button
 			_cameraMousePixelCoord = window.mapPixelToCoords(sf::Mouse::getPosition());
 }
 
-void Testbed::internalEventHandler(const sf::Event event)
+void Testbed::internalMouseMoveHandler(const sf::Event::MouseMoveEvent moved)
 {
-	auto view = window.getView();
-	if (event.type == sf::Event::Resized) // Resize view when window resized
-	{
-		sf::Vector2f oldViewSize = view.getSize();
-		float zoomLevel;
-		if (window.getSize().x != event.size.width)
-			zoomLevel = view.getSize().y / window.getSize().y;
-		else
-			zoomLevel = view.getSize().x / window.getSize().x;
-
-		view.setSize(window.getSize().x, window.getSize().y);
-		view.setSize(view.getSize() * (zoomLevel));
-		view.setCenter(view.getCenter() + (view.getSize() - oldViewSize) / 2.f);
-
-		_viewSizeChanged = true;
-		window.setView(view);
-	}
-	else
-	{
-		if (window.hasFocus())
-		{
-			if (event.type == sf::Event::MouseMoved) // Update mousePos
-			{
-
-				mousePos = { event.mouseMove.x, event.mouseMove.y };
-			}
-			else if (event.type == sf::Event::MouseWheelScrolled and debug.inputControl and !blockControlCurFrame) // Zoom when mouse scroll view
-			{
-				_viewSizeChanged = true;
-				sf::Vector2i pixel = { event.mouseWheelScroll.x, event.mouseWheelScroll.y };
-
-				const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
-				sf::View view { window.getView() };
-
-				if (event.mouseWheelScroll.delta < 0)
-				{
-					if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
-						view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
-				}
-				else
-				{
-					if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
-						view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
-				}
-
-				window.setView(view);
-				const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
-				const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
-				view.move(offsetCoords);
-				window.setView(view);
-
-			}
-		}
-	}
-
+	mousePos = { moved.x, moved.y };
 }
 
-void Testbed::internalUpdateHandler()
+void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelScrollEvent scrolled)
+{
+	if (debug.inputControl) // Zoom when mouse scroll view
+	{
+		_viewSizeChanged = true;
+		sf::Vector2i pixel = { scrolled.x, scrolled.y };
+
+		const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
+		sf::View view { window.getView() };
+
+		if (scrolled.delta < 0)
+		{
+			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
+				view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
+		}
+		else
+		{
+			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
+				view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
+		}
+
+		window.setView(view);
+		const sf::Vector2f afterCoord { window.mapPixelToCoords(pixel) };
+		const sf::Vector2f offsetCoords { beforeCoord - afterCoord };
+		view.move(offsetCoords);
+		window.setView(view);
+
+	}
+}
+
+void Testbed::internalSizeEventHandler(const sf::Event::SizeEvent size)
+{
+	auto view = window.getView();
+	sf::Vector2f oldViewSize = view.getSize();
+	float zoomLevel;
+	if (window.getSize().x != size.width)
+		zoomLevel = view.getSize().y / window.getSize().y;
+	else
+		zoomLevel = view.getSize().x / window.getSize().x;
+	view.setSize(window.getSize().x, window.getSize().y);
+	view.setSize(view.getSize() * (zoomLevel));
+	view.setCenter(view.getCenter() + (view.getSize() - oldViewSize) / 2.f);
+	_viewSizeChanged = true;
+	window.setView(view);
+}
+
+void Testbed::internalUpdateHandler(const sf::Time delta)
 {
 	using Keys = sf::Keyboard::Key;
 	using sf::Keyboard;
@@ -302,7 +308,7 @@ void Testbed::internalUpdateHandler()
 	{
 		auto view = window.getView();
 		auto viewSize = window.getView().getSize();
-		if (window.hasFocus() and debug.keyboardCameraControl and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
+		if (window.hasFocus() and debug.keyboardCameraControl and !internalBlockKeyboadInput and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
 		{
 			float speed = debug.cameraKeyboardSpeed * (debug.cameraKeyboardSpeed * std::min(viewSize.x, viewSize.y));
 
@@ -384,7 +390,7 @@ void Testbed::internalDrawHandler()
 			segmentsInterval *= 2;
 		}
 		// TODO Implement ruler segment interval for scale less than 1
-		
+
 		size_t segmentsCount = relativeDistance / segmentsInterval;
 
 		size_t verticeShift = 6;
@@ -522,7 +528,7 @@ void Testbed::internalDrawHandler()
 			}
 			// TODO: Implement grid step size for less than debug.gridStep
 			{
-				
+
 			}
 
 			_gridStep = gridStepSize;
@@ -565,7 +571,10 @@ void Testbed::internalDrawHandler()
 void VertexDrawQueue::extendMemory(size_t size)
 {
 	size *= MemoryExpandMultiplier;
-	memory = (char *)std::realloc(memory, size);
+	if (memory)
+		memory = (char *)std::realloc(memory, size);
+	else
+		memory = (char *)std::malloc(size);
 	memorySize = size;
 }
 
@@ -576,11 +585,8 @@ void VertexDrawQueue::copyVerticesBlock(const sf::Vertex * const vertices, size_
 	if (memorySize < memoryBlockSize + memorySize)
 		extendMemory((memoryBlockSize + memorySize));
 	std::memcpy(memory + headBatchOffset + HeaderSize, vertices, VertexSize * count);
-
 	++batchCount;
 }
-
-
 
 VertexDrawQueue::VertexDrawQueue() : memory(nullptr), memorySize(0), batchCount(0), headBatchOffset(0) {}
 
@@ -592,12 +598,11 @@ VertexDrawQueue::VertexDrawQueue(const VertexDrawQueue & other) : memory((char *
 VertexDrawQueue::VertexDrawQueue(VertexDrawQueue && other) : memory(other.memory), memorySize(other.memorySize), batchCount(other.batchCount), headBatchOffset(other.headBatchOffset)
 {
 	other.memory = nullptr;
+	other.memorySize = 0;
+	other.reset();
 }
 
-VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0)
-{
-
-}
+VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
 
 VertexDrawQueue::~VertexDrawQueue()
 {
@@ -616,16 +621,20 @@ VertexDrawQueue & VertexDrawQueue::operator=(const VertexDrawQueue & other)
 
 VertexDrawQueue & VertexDrawQueue::operator=(VertexDrawQueue && other) noexcept
 {
+	memory = other.memory;
 	memorySize = other.memorySize;
 	batchCount = other.batchCount;
 	headBatchOffset = other.headBatchOffset;
-	memory = other.memory;
 	other.memory = nullptr;
+	other.memorySize = 0;
+	other.reset();
 	return *this;
 }
 
 sf::Vertex * VertexDrawQueue::allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
 {
+	if (headBatchOffset + count * VertexSize >= memorySize)
+		extendMemory(headBatchOffset + count * VertexSize);
 	BatchHeader * head = (BatchHeader *)(memory + headBatchOffset);
 	head->type = primitive;
 	head->size = count;
