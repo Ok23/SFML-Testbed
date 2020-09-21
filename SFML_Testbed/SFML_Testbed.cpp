@@ -13,7 +13,6 @@ protected:
 	}
 	void update(const sf::Time delta) override
 	{
-
 	}
 	void onKey(const sf::Event::KeyEvent key, bool pressed) override
 	{
