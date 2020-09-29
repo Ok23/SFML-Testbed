@@ -1,6 +1,7 @@
 #pragma once
 #include <string_view>
 #include <iostream>
+#include <sstream>
 
 
 using Key = sf::Keyboard::Key;
@@ -57,6 +58,7 @@ class Testbed
 public:
 	struct DebugSettings
 	{
+		Hotkey toggleDebugWindow { sf::Keyboard::Key::F1, false, true };
 		Hotkey toggleGridHotkey { sf::Keyboard::Key::G, false, true };
 		Hotkey toggleViewportHotkey { sf::Keyboard::Key::V, false, true };
 		Hotkey toggleInfoHotkey { sf::Keyboard::Key::I, false, true };
@@ -74,15 +76,19 @@ public:
 		bool drawViewport = true;
 		bool drawInfo = true;
 		bool enableDrawing = true;
-		bool cameraControl = true;
+		bool enableCamera = true;
+		bool mouseWheelZoom = true;
+		bool mouseCameraDragControl = true;
 		bool keyboardCameraControl = false;
 		bool inputControl = true;
+		bool showDebugWindow = false;
 	};
 
-	Testbed(sf::VideoMode videoMode = { 800, 600 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings{ 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
+	Testbed(sf::VideoMode videoMode = { 1200, 800 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings{ 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
 	const sf::Window & getWindow() const;
 	const sf::Font & getDefaultFont();
 	int run();
+	virtual ~Testbed() = default;
 protected:
 	virtual void load();
 	virtual void update(const sf::Time delta);
@@ -95,7 +101,7 @@ protected:
 	virtual void onMouseEntered();
 	virtual void onLostFocus();
 	virtual void onGainedFocus();
-	virtual void onResized(sf::Event::SizeEvent size);
+	virtual void onResized(const sf::Event::SizeEvent size);
 	virtual void onTextEntered(const sf::Event::TextEvent text);
 	/// @brief Called when window close button pressed
 	/// @return If true close window
@@ -142,6 +148,8 @@ private:
 	bool _viewSizeChanged;
 	bool _screenRuler;
 	bool _guiViewApplied;
+
+	std::ostringstream _stringStream;
 };
 
 

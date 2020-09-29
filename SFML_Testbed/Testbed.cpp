@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Testbed.h"
 #include <sstream>
+#include <magic_enum.hpp>
 #pragma warning(disable: 26451)
 
 
@@ -8,7 +9,6 @@
 Testbed::Testbed(sf::VideoMode videoMode, std::string_view title, sf::ContextSettings windowSettings, sf::Uint32 windowStyle)
 	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), internalBlockKeyboadInput(false), internalBlockMouseInput(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
-	window.setVerticalSyncEnabled(true);
 	defaultFont.loadFromFile("verdana.ttf");
 }
 
@@ -31,8 +31,9 @@ int Testbed::run()
 	}
 	else
 	{
-		window.create(videoMode, windowTitle, windowStyle, windowContext);
 		isRunning = true;
+		window.create(videoMode, windowTitle, windowStyle, windowContext);
+		window.setFramerateLimit(60);
 	}
 	ImGui::SFML::Init(window, true);
 	load();
@@ -44,8 +45,8 @@ int Testbed::run()
 		{
 			ImGui::SFML::ProcessEvent(event);
 			onEvent(event);
-			internalBlockKeyboadInput = ImGui::IsAnyWindowFocused();
-			internalBlockMouseInput = ImGui::IsAnyWindowFocused();
+			internalBlockKeyboadInput = ImGui::GetIO().WantCaptureKeyboard;
+			internalBlockMouseInput = ImGui::GetIO().WantCaptureMouse;
 			switch (event.type)
 			{
 			case sf::Event::Closed:
@@ -111,6 +112,7 @@ int Testbed::run()
 				break;
 			case sf::Event::Resized:
 				onResized(event.size);
+				internalSizeEventHandler(event.size);
 				break;
 			case sf::Event::TextEntered:
 				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
@@ -167,7 +169,7 @@ void Testbed::onMouseMoved(const sf::Event::MouseMoveEvent wheel) {}
 void Testbed::onMouseEntered() {}
 void Testbed::onLostFocus() {}
 void Testbed::onGainedFocus() {}
-void Testbed::onResized(sf::Event::SizeEvent size) {}
+void Testbed::onResized(const sf::Event::SizeEvent size) {}
 void Testbed::onTextEntered(const sf::Event::TextEvent text) {}
 bool Testbed::onExitEvent() { return true; }
 
@@ -221,6 +223,8 @@ void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool presse
 			debug.drawInfo = debug.drawInfo ? false : true;
 		else if (debug.resetViewHotkey == key)
 			resetViewport();
+		else if (debug.toggleDebugWindow == key)
+			debug.showDebugWindow = debug.showDebugWindow ? false : true;
 	}
 	else if (debug.beginRulerHotkey == key)
 	{
@@ -245,7 +249,7 @@ void Testbed::internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent 
 	if (!debug.inputControl or blockControlCurFrame)
 		return;
 	if (button.button == sf::Mouse::Middle and pressed) // Save mouse coords for shift
-		if (debug.cameraControl)
+		if (debug.enableCamera and debug.mouseCameraDragControl)
 			_cameraMousePixelCoord = window.mapPixelToCoords(sf::Mouse::getPosition());
 }
 
@@ -256,7 +260,7 @@ void Testbed::internalMouseMoveHandler(const sf::Event::MouseMoveEvent moved)
 
 void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelScrollEvent scrolled)
 {
-	if (debug.inputControl) // Zoom when mouse scroll view
+	if (debug.inputControl and debug.enableCamera and debug.mouseWheelZoom) // Zoom when mouse scroll view
 	{
 		_viewSizeChanged = true;
 		sf::Vector2i pixel = { scrolled.x, scrolled.y };
@@ -304,11 +308,11 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 {
 	using Keys = sf::Keyboard::Key;
 	using sf::Keyboard;
-	if (debug.cameraControl and debug.inputControl and !blockControlCurFrame)
+	if (debug.enableCamera and debug.inputControl and !blockControlCurFrame)
 	{
 		auto view = window.getView();
 		auto viewSize = window.getView().getSize();
-		if (window.hasFocus() and debug.keyboardCameraControl and !internalBlockKeyboadInput and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
+		if (window.hasFocus() and debug.enableCamera and debug.keyboardCameraControl and !internalBlockKeyboadInput and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
 		{
 			float speed = debug.cameraKeyboardSpeed * (debug.cameraKeyboardSpeed * std::min(viewSize.x, viewSize.y));
 
@@ -332,7 +336,7 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 			view.move(direction);
 			window.setView(view);
 		}
-		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.inputControl and !blockControlCurFrame)
+		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.mouseCameraDragControl and debug.inputControl and !blockControlCurFrame)
 		{
 			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
@@ -357,6 +361,55 @@ void Testbed::internalDrawHandler()
 	scaleFormatStr.str("");
 	text.setCharacterSize(10);
 	text.setFont(defaultFont);
+
+	// Draw debug window
+	if (debug.showDebugWindow)
+	{
+		using namespace ImGui;
+		ImGui::Begin("Debug menu", &debug.showDebugWindow);
+		Checkbox("##camera", &debug.enableCamera);
+		SameLine();
+		if (TreeNode("Camera"))
+		{
+			Checkbox("Keyboard control", &debug.keyboardCameraControl);
+			Checkbox("Mouse drag control", &debug.mouseCameraDragControl);
+			Checkbox("Mouse wheel zoom control", &debug.mouseWheelZoom);
+			TreePop();
+		}
+		
+		Checkbox("##drawing", &debug.enableDrawing);
+		SameLine();
+		if (TreeNode("Gui"))
+		{
+
+			Checkbox("##grid", &debug.drawGrid);
+			SameLine();
+			if (TreeNode("Grid"))
+			{
+				int density = debug.gridDensity;
+				SetNextItemWidth(40);
+				ImGui::DragInt("density", &density, 0.2, 20, 100);
+				ImGui::DragFloat("step size", &debug.gridStep, 0.2, 1.1, 14);
+				debug.gridDensity = density;
+				TreePop();
+			}
+			//Checkbox("Grid", &debug.drawGrid);
+
+			Checkbox("Viewport", &debug.drawViewport);
+			Checkbox("Info", &debug.drawInfo);
+			TreePop();
+		}
+		//if (CollapsingHeader("Draw options"))
+		//{
+		//	Checkbox("Grid", &debug.drawGrid);
+		//	Checkbox("Viewport", &debug.drawViewport);
+		//	Checkbox("Info", &debug.drawInfo);
+		//}
+
+		//window.
+
+		ImGui::End();
+	}
 
 	if (!debug.enableDrawing)
 		return;
