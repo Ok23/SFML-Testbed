@@ -2,7 +2,190 @@
 #include "Testbed.h"
 #include <sstream>
 #include <magic_enum.hpp>
+#include <imgui_internal.h>
+#include <set>
+#include "magic_get/include/boost/pfr.hpp"
+
 #pragma warning(disable: 26451)
+
+static float _maxExprWidth = 0;
+static float _maxResultWidth = 0;
+static int _curFrame = -1;
+static std::map<size_t, size_t> _hashSet;
+
+template<typename T>
+T _inspectExpr(std::string_view expr, T && result, const char * func, size_t line)
+{
+	using UnderT = std::decay_t<T>;
+	
+	static thread_local std::ostringstream format;
+	
+	struct detail
+	{
+		static constexpr ImGuiDataType_ IsBaseTypeOf()
+		{
+			ImGuiDataType_ resultType = ImGuiDataType_::ImGuiDataType_COUNT;
+			if (std::is_same_v<ImS8, UnderT> or std::is_same_v<bool, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S8;
+			}
+			else if (std::is_same_v<ImU8, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U8;
+			}
+			else if (std::is_same_v<ImS16, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S16;
+			}
+			else if (std::is_same_v<ImU16, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U16;
+			}
+			else if (std::is_same_v<ImS32, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S32;
+			}
+			else if (std::is_same_v<ImU32, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U32;
+			}
+			else if (std::is_same_v<ImS64, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S64;
+			}
+			else if (std::is_same_v<ImU64, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U64;
+			}
+			else if (std::is_same_v<float, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_Float;
+			}
+			else if (std::is_same_v<double, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_Double;
+			}
+			return resultType;
+		}
+	};
+	
+	auto exprHash = std::hash<std::string_view> {}(expr);
+
+	constexpr ImGuiDataType_ resultType = detail::IsBaseTypeOf();;
+	constexpr bool isEnum = std::is_enum_v<UnderT>;
+	constexpr bool editable = std::is_lvalue_reference_v<T> and !std::is_const_v<std::remove_reference_t<T>> and (resultType != ImGuiDataType_::ImGuiDataType_COUNT or isEnum);
+
+	ImGui::Begin("Expressions", nullptr, ImGuiWindowFlags_::ImGuiWindowFlags_NoScrollbar);
+	ImGui::Columns(2, nullptr, false);
+
+	if (_curFrame != ImGui::GetFrameCount())
+	{
+		_hashSet.clear();
+		_curFrame = ImGui::GetFrameCount();
+	}
+	auto finded = _hashSet.find(exprHash);
+	if (finded != _hashSet.end())
+	{
+		finded->second += 1;
+		exprHash += finded->second;
+	}
+	else
+	{
+		_hashSet.emplace(std::map<size_t, size_t>::value_type { exprHash, 0 });
+	}
+	
+	format << "##" << expr << exprHash;
+	const auto exprStringId = format.str();
+	format.str("");
+	if constexpr (isEnum)
+	{
+		format << magic_enum::enum_name(result);
+	}
+	else
+	{
+		format << result;
+	}
+	
+	const auto resultString = format.str();
+	format.str("");
+	format << "[" << typeid(T).name() << "] " << func << " - " << line;
+	const auto callLocationString = format.str();
+	format.str("");
+
+	
+
+	bool openEditPopup = false;
+	if (editable)
+	{
+		ImGui::TextColored({ 151.f / 255.f, 173.f / 255.f, 237.f / 255.f, 1.f }, expr.data());
+		if (ImGui::IsItemClicked())
+			ImGui::OpenPopup(exprStringId.data());
+	}
+	else
+	{
+		ImGui::Text(expr.data());
+	}
+
+	_maxExprWidth = std::max(ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x + 5, _maxExprWidth);
+
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::BeginTooltip();
+		ImGui::Text(callLocationString.data());
+		ImGui::EndTooltip();
+	}
+
+
+	ImGui::NextColumn();
+
+	ImGui::Text(resultString.data());
+	_maxResultWidth = std::max(ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x + ImGui::GetStyle().WindowPadding.x, _maxResultWidth);
+
+	//print(maxExprWidth, maxResultWidth);
+
+	if (ImGui::IsItemClicked() and editable)
+		ImGui::OpenPopup(exprStringId.data());
+	if constexpr (editable)
+	{
+		if (ImGui::BeginPopup(exprStringId.data()))
+		{
+			if constexpr (resultType != ImGuiDataType_COUNT)
+			{
+				ImGui::SetNextItemWidth(100);
+				ImGui::InputScalar(exprStringId.data(), resultType, &result);
+			}
+			else if (isEnum)
+			{
+				int curItem = (std::underlying_type_t<UnderT>)result;
+				if (ImGui::BeginCombo(exprStringId.data(), magic_enum::enum_name(result).data()))
+				{
+					constexpr auto & entries = magic_enum::enum_entries<T>();
+					bool selected = false;
+					for (size_t i = 0; i < entries.size(); ++i)
+					{
+						if (curItem == i)
+							selected = true;
+						
+						if (ImGui::Selectable(entries[i].second.data(), &selected))
+							result = (T)i;
+						selected = false;
+					}
+					ImGui::EndCombo();
+				}
+				
+			}
+			ImGui::EndPopup();
+		}
+
+	}
+	ImGui::SetColumnWidth(0, _maxExprWidth);
+	ImGui::SetColumnWidth(1, _maxResultWidth);
+	ImGui::SetWindowSize({ _maxExprWidth + _maxResultWidth + ImGui::GetStyle().IndentSpacing, 0 });
+
+	ImGui::Separator();
+	ImGui::End();
+	return result;
+}
 
 
 
@@ -36,6 +219,15 @@ int Testbed::run()
 		window.setFramerateLimit(60);
 	}
 	ImGui::SFML::Init(window, true);
+	ImGui::GetStyle().WindowRounding = 0;
+	ImGui::GetStyle().ChildRounding = 0;
+	ImGui::GetStyle().FrameRounding = 0;
+	ImGui::GetStyle().PopupRounding = 0;
+	ImGui::GetStyle().ScrollbarRounding = 0;
+	ImGui::GetStyle().GrabRounding = 0;
+	ImGui::GetStyle().TabRounding = 0;
+
+	ImGui::GetStyle().WindowBorderSize = 0;
 	load();
 	while (window.isOpen())
 	{
@@ -226,13 +418,13 @@ void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool presse
 		else if (debug.toggleDebugWindow == key)
 			debug.showDebugWindow = debug.showDebugWindow ? false : true;
 	}
-	else if (debug.beginRulerHotkey == key)
+	if (debug.beginRulerHotkey == key)
 	{
 		if (!pressed)
 			_screenRuler = false;
 		else if (_screenRuler == false)
 		{
-			auto view = window.getView();
+			auto & view = window.getView();
 			//window.setView(getGuiView());
 			_rulerStart = sf::Mouse::getPosition(window);
 			_rulerWorldStart = window.mapPixelToCoords(_rulerStart);
@@ -353,7 +545,6 @@ void Testbed::internalDrawHandler()
 	sf::Text text;
 	sf::Vertex vertices[512];
 	std::ostringstream scaleFormatStr {};
-	char textBuf[32];
 	sf::View view = window.getView();
 	sf::View guiView = getGuiView();
 	const float guiScaleDiff = getWindowRelativeSizeDiff();
@@ -376,7 +567,7 @@ void Testbed::internalDrawHandler()
 			Checkbox("Mouse wheel zoom control", &debug.mouseWheelZoom);
 			TreePop();
 		}
-		
+
 		Checkbox("##drawing", &debug.enableDrawing);
 		SameLine();
 		if (TreeNode("Gui"))
@@ -386,11 +577,11 @@ void Testbed::internalDrawHandler()
 			SameLine();
 			if (TreeNode("Grid"))
 			{
-				int density = debug.gridDensity;
+				int density = debug.gridBase;
 				SetNextItemWidth(40);
 				ImGui::DragInt("density", &density, 0.2, 20, 100);
-				ImGui::DragFloat("step size", &debug.gridStep, 0.2, 1.1, 14);
-				debug.gridDensity = density;
+				ImGui::DragFloat("step size", &debug.gridCellSize, 0.2, 1.1, 14);
+				debug.gridBase = density;
 				TreePop();
 			}
 			//Checkbox("Grid", &debug.drawGrid);
@@ -558,169 +749,137 @@ void Testbed::internalDrawHandler()
 		window.draw(vertices + 9, 3, sf::PrimitiveType::LineStrip);
 	}
 
+
 	// Draw grid
-	if (debug.drawGrid and debug.gridStep > 0 and debug.gridDensity > 0)
+	if (debug.grid.enabled)
 	{
-		sf::Color vertexColor { 71, 71, 71, debug.gridOpaque };
+		auto & grid = debug.grid;
+		sf::Color subGridColor { 71, 71, 71, grid.opaque };
+		sf::Color gridColor { 145, 145, 145, grid.opaque };
+		sf::Color gridColorMainAxis { 255, 255, 255, grid.opaque };
 
-		auto gridStepSize = _viewSizeChanged ? debug.gridStep : _gridStep;
+		using FloatT = double;
 
-		sf::Vector2f start = view.getCenter() - view.getSize() / 2.f;
-		sf::Vector2f end = start + view.getSize();
-		sf::FloatRect r { 100.f, 100.f, 50.f, 50.f };
-		if (_viewSizeChanged)
-		{
-			if (guiScaleDiff <= 1.f)
-			{
-				while ((end.x - start.x) / gridStepSize > debug.gridDensity)
-				{
-					gridStepSize *= debug.gridStep;
+		FloatT cellSize = grid.cellSize;
+		auto startF = view.getCenter() - view.getSize() / 2.f;
+		auto endF = startF + view.getSize();
 
-				}
-
-			}
-			// TODO: Implement grid step size for less than debug.gridStep
-			{
-
-			}
-
-			_gridStep = gridStepSize;
-		}
-
+		sf::Vector2<FloatT> start(startF.x, startF.y);
+		sf::Vector2<FloatT> end(endF.x, endF.y);
 
 		if (view.getRotation() != 0.f)
 		{
-			auto center = as<point>(view.getCenter());
-			auto quadix = wykobi::make_quadix(wykobi::make_rectangle(as<point>(start), as<point>(end)));
-			auto aabb = wykobi::aabb(wykobi::rotate(view.getRotation(), quadix, center));
-			start = as<sf::Vector2f>(aabb[0]);
-			end = as<sf::Vector2f>(aabb[1]);
+			auto center = as<wykobi::point2d<FloatT>>(sf::Vector2<FloatT>(view.getCenter().x, view.getCenter().y));
+			auto quadix = wykobi::make_quadix<FloatT>(wykobi::make_rectangle<FloatT>(as<wykobi::point2d<FloatT>>(start), as<wykobi::point2d<FloatT>>(end)));
+			auto aabb = wykobi::aabb(wykobi::rotate((FloatT)view.getRotation(), quadix, center));
+			start = as<sf::Vector2<FloatT>>(aabb[0]);
+			end = as<sf::Vector2<FloatT>>(aabb[1]);
 		}
 
-		start.x -= std::fmodf(start.x, gridStepSize) + gridStepSize;
-		start.y -= std::fmodf(start.y, gridStepSize) + gridStepSize;
+		FloatT minCellSize = cellSize / grid.base;
+		FloatT maxCellSize = cellSize * grid.base;
 
-		int i = 0;
-		for (float x = start.x; x < end.x; x += gridStepSize)
+		FloatT targetSize = cellSize;
+
+		auto lerp = [](FloatT min, FloatT max, FloatT p)
 		{
-			vertices[i++] = sf::Vertex { { x, start.y }, vertexColor };
-			vertices[i++] = sf::Vertex { { x, end.y }, vertexColor };
-		}
-		window.draw(vertices, i, sf::PrimitiveType::Lines);
+			return min + p * (max - min);
+		};
 
-		i = 0;
-		for (float y = start.y; y < end.y; y += gridStepSize)
+		FloatT scaleMul = 0.25;
+
+		if (grid.dynamicScale)
 		{
-			vertices[i++] = sf::Vertex { { start.x, y }, vertexColor };
-			vertices[i++] = sf::Vertex { { end.x, y }, vertexColor };
+			if (guiScaleDiff <= FloatT(1))
+			{
+				targetSize = lerp(cellSize, maxCellSize, scaleMul);
+				while ((grid.cellSize / guiScaleDiff) > targetSize)
+				{
+					cellSize *= (FloatT)grid.base;
+					maxCellSize = cellSize * grid.base;
+					targetSize = lerp(cellSize, maxCellSize, scaleMul);
+				}
+			}
+			else
+			{
+				targetSize = lerp(cellSize, minCellSize, scaleMul);
+				while ((grid.cellSize / guiScaleDiff) < targetSize)
+				{
+					cellSize /= (FloatT)grid.base;
+					minCellSize = cellSize / grid.base;
+					targetSize = lerp(cellSize, minCellSize, scaleMul);
+				}
+			}
 		}
-		window.draw(vertices, i, sf::PrimitiveType::Lines);
+
+		
+		FloatT gridDensity = cellSize / targetSize;
+
+		Inspect(minCellSize);
+		Inspect(maxCellSize);
+		Inspect(cellSize);
+		Inspect(targetSize);
+		Inspect(cellSize / guiScaleDiff);
+		Inspect(cellSize * guiScaleDiff);
+		Inspect(grid.cellSize / guiScaleDiff);
+		Inspect(guiScaleDiff);
+
+		start.x -= std::fmod(start.x, cellSize) + cellSize;
+		start.y -= std::fmod(start.y, cellSize) + cellSize;
+
+		//subGridColor.a = grid.opaque * (1.f - std::pow(1.f - gridDensity, 5));
+
+		size_t xVertCount = std::ceil((end.x - start.x) / cellSize) * (FloatT)2;
+		size_t yVertCount = std::ceil((end.y - start.y) / cellSize) * (FloatT)2;
+
+		
+
+		auto zeroComp = [&](FloatT val)
+		{
+			if (guiScaleDiff >= 1.)
+				return fabs(val) <= (DBL_EPSILON * 8192);
+			else
+				return fabs(val) <= DBL_EPSILON;
+		};
+
+		auto comp = [&](FloatT val) 
+		{ 
+			return fabs(fmod(val, grid.base * grid.cellSize)) <= DBL_EPSILON * 64;
+		};
+
+		FloatT x = start.x;
+		for (size_t i = 0; i < xVertCount; i += 2)
+		{
+			sf::Color color = subGridColor;
+			//if (x == 0)
+			if (zeroComp(x))
+				color = gridColorMainAxis;
+			//else if (std::fmod(x, grid.base * cellSize) == 0.f)
+			else if (comp(x))
+				color = gridColor;
+			debugVertices.emplace_back(sf::Vector2f(x, start.y), color);
+			debugVertices.emplace_back(sf::Vector2f(x, end.y), color);
+			x += cellSize;
+		}
+
+		FloatT y = start.y;
+		for (size_t i = 0; i < yVertCount; i += 2)
+		{
+			sf::Color color = subGridColor;
+			//if (y == 0)
+			if (zeroComp(y))
+				color = gridColorMainAxis;
+			//else if (std::fmod(y, grid.base * cellSize) == 0.f)
+			else if (comp(y))
+				color = gridColor;
+			debugVertices.emplace_back(sf::Vector2f(start.x, y), color);
+			debugVertices.emplace_back(sf::Vector2f(end.x, y), color);
+			y += cellSize;
+		}
+		window.draw(debugVertices.data(), debugVertices.size(), sf::PrimitiveType::Lines);
+		debugVertices.clear();
 	}
 }
 
 
 #pragma warning(default: 26451)
-
-void VertexDrawQueue::extendMemory(size_t size)
-{
-	size *= MemoryExpandMultiplier;
-	if (memory)
-		memory = (char *)std::realloc(memory, size);
-	else
-		memory = (char *)std::malloc(size);
-	memorySize = size;
-}
-
-void VertexDrawQueue::copyVerticesBlock(const sf::Vertex * const vertices, size_t count)
-{
-	assert(count > 0);
-	size_t memoryBlockSize = VertexSize * count + HeaderSize;
-	if (memorySize < memoryBlockSize + memorySize)
-		extendMemory((memoryBlockSize + memorySize));
-	std::memcpy(memory + headBatchOffset + HeaderSize, vertices, VertexSize * count);
-	++batchCount;
-}
-
-VertexDrawQueue::VertexDrawQueue() : memory(nullptr), memorySize(0), batchCount(0), headBatchOffset(0) {}
-
-VertexDrawQueue::VertexDrawQueue(const VertexDrawQueue & other) : memory((char *)malloc(other.memorySize)), memorySize(other.memorySize), batchCount(other.batchCount), headBatchOffset(other.headBatchOffset)
-{
-	std::memcpy(memory, other.memory, headBatchOffset);
-}
-
-VertexDrawQueue::VertexDrawQueue(VertexDrawQueue && other) : memory(other.memory), memorySize(other.memorySize), batchCount(other.batchCount), headBatchOffset(other.headBatchOffset)
-{
-	other.memory = nullptr;
-	other.memorySize = 0;
-	other.reset();
-}
-
-VertexDrawQueue::VertexDrawQueue(size_t initialMemorySize) : memory((char *)malloc(initialMemorySize)), memorySize(initialMemorySize), batchCount(0), headBatchOffset(0) {}
-
-VertexDrawQueue::~VertexDrawQueue()
-{
-	if (memory) free(memory);
-}
-
-VertexDrawQueue & VertexDrawQueue::operator=(const VertexDrawQueue & other)
-{
-	memorySize = other.memorySize;
-	batchCount = other.batchCount;
-	headBatchOffset = other.headBatchOffset;
-	memory = (char *)malloc(memorySize);
-	std::memcpy(memory, other.memory, headBatchOffset);
-	return *this;
-}
-
-VertexDrawQueue & VertexDrawQueue::operator=(VertexDrawQueue && other) noexcept
-{
-	memory = other.memory;
-	memorySize = other.memorySize;
-	batchCount = other.batchCount;
-	headBatchOffset = other.headBatchOffset;
-	other.memory = nullptr;
-	other.memorySize = 0;
-	other.reset();
-	return *this;
-}
-
-sf::Vertex * VertexDrawQueue::allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
-{
-	if (headBatchOffset + count * VertexSize >= memorySize)
-		extendMemory(headBatchOffset + count * VertexSize);
-	BatchHeader * head = (BatchHeader *)(memory + headBatchOffset);
-	head->type = primitive;
-	head->size = count;
-	head->state = state;
-	headBatchOffset += VertexSize * count + HeaderSize;
-	return (sf::Vertex *)(memory + headBatchOffset + HeaderSize);
-}
-
-void VertexDrawQueue::add(const sf::Vertex * const vertices, size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state)
-{
-	copyVerticesBlock(vertices, count);
-	BatchHeader * head = (BatchHeader *)(memory + headBatchOffset);
-	head->type = primitive;
-	head->size = count;
-	head->state = state;
-	headBatchOffset += VertexSize * count + HeaderSize;
-}
-
-void VertexDrawQueue::draw(sf::RenderTarget & target, bool resetQueue)
-{
-	BatchHeader * curBatch = (BatchHeader *)memory;
-	sf::Vertex * curVertices = (sf::Vertex *)(memory + HeaderSize);
-	for (size_t i = 0; i < batchCount; ++i)
-	{
-		target.draw(curVertices, curBatch->size, curBatch->type, curBatch->state);
-		curVertices = (sf::Vertex *)((char *)curVertices + HeaderSize + VertexSize * curBatch->size);
-		curBatch = (BatchHeader *)((char *)curBatch + curBatch->size * VertexSize + HeaderSize);
-	}
-	if (resetQueue)
-	{
-		headBatchOffset = 0;
-		batchCount = 0;
-	}
-}
-
-void VertexDrawQueue::reset() { headBatchOffset = 0; batchCount = 0; }

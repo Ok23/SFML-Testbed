@@ -54,4 +54,7 @@
   <ItemGroup>
     <Font Include="verdana.ttf" />
   </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="NatvisFile.natvis" />
+  </ItemGroup>
 </Project>

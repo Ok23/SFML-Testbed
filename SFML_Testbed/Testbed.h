@@ -2,49 +2,28 @@
 #include <string_view>
 #include <iostream>
 #include <sstream>
+#include <magic_enum.hpp>
+using namespace magic_enum::bitwise_operators;
+using namespace magic_enum::ostream_operators;
+
+template<typename ... Args>
+void print(Args &&... args);
+
+template<typename T>
+T _inspectExpr(std::string_view expr, T && result, const char * func, size_t line);
+
+
+#define Inspect(arg) \
+_inspectExpr(#arg, (arg), __FUNCTION__, __LINE__)
+
 
 
 using Key = sf::Keyboard::Key;
 
 
-class VertexDrawQueue
-{
-protected:
-	struct BatchHeader
-	{
-		sf::RenderStates state;
-		sf::PrimitiveType type;
-		size_t size;
-	};
-	static constexpr size_t VertexSize = sizeof(sf::Vertex);
-	static constexpr size_t HeaderSize = sizeof(BatchHeader);
-	static constexpr size_t MemoryExpandMultiplier = 2;
-private:
-	char * memory;
-	size_t memorySize;
-	size_t batchCount;
-	size_t headBatchOffset;
-	void extendMemory(size_t size);
-	void copyVerticesBlock(const sf::Vertex * const vertices, size_t count);
-public:
-	VertexDrawQueue();
-	VertexDrawQueue(const VertexDrawQueue & other);
-	VertexDrawQueue(VertexDrawQueue && other);
-	VertexDrawQueue(size_t initialMemorySize);
-	~VertexDrawQueue();
-	VertexDrawQueue & operator = (const VertexDrawQueue & other);
-	VertexDrawQueue & operator = (VertexDrawQueue && other) noexcept;
-
-	sf::Vertex * allocate(size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
-	void add(const sf::Vertex * const vertices, size_t count, sf::PrimitiveType primitive, const sf::RenderStates & state = sf::RenderStates::Default);
-	void draw(sf::RenderTarget & target, bool resetQueue = true);
-	void reset();
-};
-
-
 struct Hotkey : public sf::Event::KeyEvent
 {
-	Hotkey(sf::Keyboard::Key key, bool alt = false, bool control = false, bool shift = false, bool system = false) : sf::Event::KeyEvent { key, alt, control, shift, system }{};
+	Hotkey(sf::Keyboard::Key key = sf::Keyboard::Key::Unknown, bool alt = false, bool control = false, bool shift = false, bool system = false) : sf::Event::KeyEvent { key, alt, control, shift, system }{};
 	Hotkey(sf::Event::KeyEvent key) : sf::Event::KeyEvent(key) {};
 	bool operator == (sf::Event::KeyEvent key) { return key.code == code and key.alt == alt and key.control == control and key.shift == shift and key.system == system; };
 	bool operator != (sf::Event::KeyEvent key) { return key.code != code or key.alt != alt or key.control != control or key.shift != shift or key.system != system; };
@@ -65,12 +44,12 @@ public:
 		Hotkey resetViewHotkey { sf::Keyboard::Key::R, false, true };
 		Hotkey beginRulerHotkey { sf::Keyboard::Key::L };
 		size_t rulerBase = 100;
-		size_t gridDensity = 32;
+		size_t gridBase = 4;
 		float maxViewSize = 1e6f;
 		float minViewSize = 1e-2f;
-		float gridStep = 4.f;
+		float gridCellSize = 32.f;
 		float cameraKeyboardSpeed = 0.1f;
-		float cameraZoomSpeed = 1.f + (1.f / 3.f);
+		float cameraZoomSpeed = 1.f + (1.f / 4.f);
 		sf::Uint8 gridOpaque = 64;
 		bool drawGrid = true;
 		bool drawViewport = true;
@@ -82,9 +61,35 @@ public:
 		bool keyboardCameraControl = false;
 		bool inputControl = true;
 		bool showDebugWindow = false;
+		struct Grid
+		{
+			size_t base = 4;
+			float cellSize = 32.f;
+			Hotkey toggleHotkey { sf::Keyboard::Key::G, false, true };
+			sf::Uint8 opaque = 85;
+			bool enabled = true;
+			bool dynamicScale = true;
+		} grid;
+		struct Camera
+		{
+			float minViewSize = 1e-2f;
+			float maxViewSize = 1e6f;
+			float keybardSpeed = 0.1f;
+			float zoomSpeed = 1.f + (1.f / 3.f);
+			Hotkey toggleHotkey;
+			Hotkey moveLeftKey { sf::Keyboard::Key::Left };
+			Hotkey moveRightKey { sf::Keyboard::Key::Right };
+			Hotkey moveUpKey { sf::Keyboard::Key::Up };
+			Hotkey moveDownKey { sf::Keyboard::Key::Down };
+			Hotkey resetView { sf::Keyboard::Key::R, false, true };
+			bool keyboard = false;
+			bool mouseWheelZoom = true;
+			bool mousePan = true;
+			bool enabled = true;
+		} camera;
 	};
 
-	Testbed(sf::VideoMode videoMode = { 1200, 800 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings{ 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
+	Testbed(sf::VideoMode videoMode = { 1200, 800 }, std::string_view title = "Testbed", sf::ContextSettings windowSettings = sf::ContextSettings { 0U, 0U, 2U }, sf::Uint32 windowStyle = sf::Style::Default);
 	const sf::Window & getWindow() const;
 	const sf::Font & getDefaultFont();
 	int run();
@@ -150,6 +155,7 @@ private:
 	bool _guiViewApplied;
 
 	std::ostringstream _stringStream;
+	std::vector<sf::Vertex> debugVertices;
 };
 
 
