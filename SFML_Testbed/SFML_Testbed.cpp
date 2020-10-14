@@ -1,5 +1,7 @@
 ﻿#include "pch.h"
 #include "Testbed.h"
+#include <execution>
+
 
 
 class TestbedClass : public Testbed
@@ -8,25 +10,20 @@ class TestbedClass : public Testbed
 protected:
 	void load() override
 	{
-		debug.showDebugWindow = true;
+		debug.grid.dynamicScale = false;
 	}
 	void draw() override
 	{
-		//print(fps.restart().asMilliseconds());
-		ImGui::ShowDemoWindow();
+		//ImGui::ShowDemoWindow();
 	}
 	void update(const sf::Time delta) override
 	{
-		
 	}
 	void onKey(const sf::Event::KeyEvent key, bool pressed) override
 	{
-		print(key.code, sf::Keyboard::Key::F1);
 	}
-
 	void onTextEntered(const sf::Event::TextEvent text) override
 	{
-		print(text.unicode, sf::Keyboard::Key::F1);
 	}
 
 };

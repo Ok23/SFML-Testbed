@@ -6,6 +6,7 @@
 #include <set>
 #include "magic_get/include/boost/pfr.hpp"
 
+#pragma warning(push)
 #pragma warning(disable: 26451)
 
 static float _maxExprWidth = 0;
@@ -75,7 +76,7 @@ T _inspectExpr(std::string_view expr, T && result, const char * func, size_t lin
 	constexpr bool isEnum = std::is_enum_v<UnderT>;
 	constexpr bool editable = std::is_lvalue_reference_v<T> and !std::is_const_v<std::remove_reference_t<T>> and (resultType != ImGuiDataType_::ImGuiDataType_COUNT or isEnum);
 
-	ImGui::Begin("Expressions", nullptr, ImGuiWindowFlags_::ImGuiWindowFlags_NoScrollbar);
+	ImGui::Begin("Expressions", nullptr, ImGuiWindowFlags_NoScrollbar);
 	ImGui::Columns(2, nullptr, false);
 
 	if (_curFrame != ImGui::GetFrameCount())
@@ -698,6 +699,7 @@ void Testbed::internalDrawHandler()
 		vertices[5] = sf::Vertex { { vertices[1].position.x, vertices[1].position.y - 5.f }, sf::Color { 229, 231, 252, 255 } };
 
 
+
 		text.setString(scaleFormatStr.str());
 		scaleFormatStr.str("");
 		auto textRect = text.getLocalBounds();
@@ -755,8 +757,8 @@ void Testbed::internalDrawHandler()
 	{
 		auto & grid = debug.grid;
 		sf::Color subGridColor { 71, 71, 71, grid.opaque };
-		sf::Color gridColor { 145, 145, 145, grid.opaque };
-		sf::Color gridColorMainAxis { 255, 255, 255, grid.opaque };
+		sf::Color gridBaseColor { 145, 145, 145, grid.opaque };
+		sf::Color gridZeroAxisColor { 255, 255, 255, grid.opaque };
 
 		using FloatT = double;
 
@@ -776,110 +778,89 @@ void Testbed::internalDrawHandler()
 			end = as<sf::Vector2<FloatT>>(aabb[1]);
 		}
 
-		FloatT minCellSize = cellSize / grid.base;
-		FloatT maxCellSize = cellSize * grid.base;
-
 		FloatT targetSize = cellSize;
 
-		auto lerp = [](FloatT min, FloatT max, FloatT p)
+		auto middle = [](FloatT a, FloatT b)
 		{
-			return min + p * (max - min);
+			return a + 0.5 * (b - a);
 		};
-
-		FloatT scaleMul = 0.25;
 
 		if (grid.dynamicScale)
 		{
 			if (guiScaleDiff <= FloatT(1))
 			{
-				targetSize = lerp(cellSize, maxCellSize, scaleMul);
+				targetSize = middle(cellSize, cellSize * grid.base);
 				while ((grid.cellSize / guiScaleDiff) > targetSize)
 				{
 					cellSize *= (FloatT)grid.base;
-					maxCellSize = cellSize * grid.base;
-					targetSize = lerp(cellSize, maxCellSize, scaleMul);
+					targetSize = middle(cellSize, cellSize * grid.base);
 				}
 			}
 			else
 			{
-				targetSize = lerp(cellSize, minCellSize, scaleMul);
+				targetSize = middle(cellSize, cellSize / grid.base);
 				while ((grid.cellSize / guiScaleDiff) < targetSize)
 				{
 					cellSize /= (FloatT)grid.base;
-					minCellSize = cellSize / grid.base;
-					targetSize = lerp(cellSize, minCellSize, scaleMul);
+					targetSize = middle(cellSize, cellSize / grid.base);
 				}
 			}
 		}
 
-		
-		FloatT gridDensity = cellSize / targetSize;
+		FloatT gridDensity = (1.0 - (grid.cellSize / guiScaleDiff) / middle(cellSize, cellSize * grid.base));
 
-		Inspect(minCellSize);
-		Inspect(maxCellSize);
-		Inspect(cellSize);
-		Inspect(targetSize);
-		Inspect(cellSize / guiScaleDiff);
-		Inspect(cellSize * guiScaleDiff);
-		Inspect(grid.cellSize / guiScaleDiff);
-		Inspect(guiScaleDiff);
+		FloatT subGridColorEase = grid.opaque * (1.f - std::pow(1.f - std::max(gridDensity, 0.0), 2));
+		FloatT gridColorEase = grid.opaque * std::max(1.0 - (grid.cellSize / (guiScaleDiff * 4)) / middle(cellSize, cellSize * grid.base), 0.0);
+		FloatT zeroAxisGridColorEase = grid.opaque * std::max(1.0 - (grid.cellSize / (guiScaleDiff * 5)) / middle(cellSize, cellSize * grid.base), 0.0);
 
 		start.x -= std::fmod(start.x, cellSize) + cellSize;
 		start.y -= std::fmod(start.y, cellSize) + cellSize;
 
-		//subGridColor.a = grid.opaque * (1.f - std::pow(1.f - gridDensity, 5));
+		subGridColor.a = subGridColorEase;
 
-		size_t xVertCount = std::ceil((end.x - start.x) / cellSize) * (FloatT)2;
-		size_t yVertCount = std::ceil((end.y - start.y) / cellSize) * (FloatT)2;
+		if (!grid.dynamicScale and subGridColor.a <= 0.01)
+		{
+			gridBaseColor.a = gridColorEase;
+			gridZeroAxisColor.a = zeroAxisGridColorEase;
+		}
+			
+		if (zeroAxisGridColorEase > 0.0)
+		{
+			size_t xVertCount = std::ceil((end.x - start.x) / cellSize) * (FloatT)2;
+			size_t yVertCount = std::ceil((end.y - start.y) / cellSize) * (FloatT)2;
 
+			FloatT x = start.x;
+			for (size_t i = 0; i < xVertCount; i += 2)
+			{
+				sf::Color color = subGridColor;
+				if (fabs(x) <= (DBL_EPSILON * 8192)) // Zero axis
+					color = gridZeroAxisColor;
+				else if (fabs(remainder(x, grid.base * cellSize)) <= DBL_EPSILON * 8192) // Grid base 
+					color = gridBaseColor;
+				debugVertices.emplace_back(sf::Vector2f(x, start.y), color);
+				debugVertices.emplace_back(sf::Vector2f(x, end.y), color);
+				x += cellSize;
+			}
+
+			FloatT y = start.y;
+			for (size_t i = 0; i < yVertCount; i += 2)
+			{
+				sf::Color color = subGridColor;
+				if (fabs(y) <= (DBL_EPSILON * 8192)) // Zero axis
+					color = gridZeroAxisColor;
+				else if (fabs(remainder(y, grid.base * cellSize)) <= DBL_EPSILON * 8192) // Grid base
+					color = gridBaseColor;
+				debugVertices.emplace_back(sf::Vector2f(start.x, y), color);
+				debugVertices.emplace_back(sf::Vector2f(end.x, y), color);
+				y += cellSize;
+			}
+			window.draw(debugVertices.data(), debugVertices.size(), sf::PrimitiveType::Lines);
+			debugVertices.clear();
+		}
 		
-
-		auto zeroComp = [&](FloatT val)
-		{
-			if (guiScaleDiff >= 1.)
-				return fabs(val) <= (DBL_EPSILON * 8192);
-			else
-				return fabs(val) <= DBL_EPSILON;
-		};
-
-		auto comp = [&](FloatT val) 
-		{ 
-			return fabs(fmod(val, grid.base * grid.cellSize)) <= DBL_EPSILON * 64;
-		};
-
-		FloatT x = start.x;
-		for (size_t i = 0; i < xVertCount; i += 2)
-		{
-			sf::Color color = subGridColor;
-			//if (x == 0)
-			if (zeroComp(x))
-				color = gridColorMainAxis;
-			//else if (std::fmod(x, grid.base * cellSize) == 0.f)
-			else if (comp(x))
-				color = gridColor;
-			debugVertices.emplace_back(sf::Vector2f(x, start.y), color);
-			debugVertices.emplace_back(sf::Vector2f(x, end.y), color);
-			x += cellSize;
-		}
-
-		FloatT y = start.y;
-		for (size_t i = 0; i < yVertCount; i += 2)
-		{
-			sf::Color color = subGridColor;
-			//if (y == 0)
-			if (zeroComp(y))
-				color = gridColorMainAxis;
-			//else if (std::fmod(y, grid.base * cellSize) == 0.f)
-			else if (comp(y))
-				color = gridColor;
-			debugVertices.emplace_back(sf::Vector2f(start.x, y), color);
-			debugVertices.emplace_back(sf::Vector2f(end.x, y), color);
-			y += cellSize;
-		}
-		window.draw(debugVertices.data(), debugVertices.size(), sf::PrimitiveType::Lines);
-		debugVertices.clear();
+		
 	}
 }
 
 
-#pragma warning(default: 26451)
+#pragma warning(pop)
