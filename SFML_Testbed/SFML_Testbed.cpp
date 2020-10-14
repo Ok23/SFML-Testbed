@@ -10,7 +10,6 @@ class TestbedClass : public Testbed
 protected:
 	void load() override
 	{
-		debug.grid.dynamicScale = false;
 	}
 	void draw() override
 	{

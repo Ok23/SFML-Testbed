@@ -833,7 +833,7 @@ void Testbed::internalDrawHandler()
 			for (size_t i = 0; i < xVertCount; i += 2)
 			{
 				sf::Color color = subGridColor;
-				if (fabs(x) <= (DBL_EPSILON * 8192)) // Zero axis
+				if (grid.zeroAxisGuideSaturationIncrease and fabs(x) <= (DBL_EPSILON * 8192)) // Zero axis
 					color = gridZeroAxisColor;
 				else if (fabs(remainder(x, grid.base * cellSize)) <= DBL_EPSILON * 8192) // Grid base 
 					color = gridBaseColor;
@@ -846,7 +846,7 @@ void Testbed::internalDrawHandler()
 			for (size_t i = 0; i < yVertCount; i += 2)
 			{
 				sf::Color color = subGridColor;
-				if (fabs(y) <= (DBL_EPSILON * 8192)) // Zero axis
+				if (grid.zeroAxisGuideSaturationIncrease and fabs(y) <= (DBL_EPSILON * 8192)) // Zero axis
 					color = gridZeroAxisColor;
 				else if (fabs(remainder(y, grid.base * cellSize)) <= DBL_EPSILON * 8192) // Grid base
 					color = gridBaseColor;
