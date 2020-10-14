@@ -240,6 +240,7 @@ int Testbed::run()
 			onEvent(event);
 			internalBlockKeyboadInput = ImGui::GetIO().WantCaptureKeyboard;
 			internalBlockMouseInput = ImGui::GetIO().WantCaptureMouse;
+			blockControlCurFrame = internalBlockKeyboadInput;
 			switch (event.type)
 			{
 			case sf::Event::Closed:
@@ -247,51 +248,45 @@ int Testbed::run()
 					window.close();
 				break;
 			case sf::Event::KeyPressed:
-				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
+				if (window.hasFocus() and !internalBlockKeyboadInput)
 				{
 					onKey(event.key, true);
-					if (!internalBlockKeyboadInput)
-						internalKeyEventHandler(event.key, true);
+					internalKeyEventHandler(event.key, true);
 				}
 				break;
 			case sf::Event::KeyReleased:
-				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
+				if (window.hasFocus() and !internalBlockKeyboadInput)
 				{
 					onKey(event.key, false);
-					if (!internalBlockKeyboadInput)
-						internalKeyEventHandler(event.key, false);
+					internalKeyEventHandler(event.key, false);
 				}
 				break;
 			case sf::Event::MouseButtonPressed:
-				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
+				if (window.hasFocus() and !internalBlockMouseInput)
 				{
 					onMouseButton(event.mouseButton, true);
-					if (!internalBlockMouseInput)
-						internalMouseButtonEventHandler(event.mouseButton, true);
+					internalMouseButtonEventHandler(event.mouseButton, true);
 				}
 				break;
 			case sf::Event::MouseButtonReleased:
-				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
+				if (window.hasFocus() and !internalBlockMouseInput)
 				{
 					onMouseButton(event.mouseButton, false);
-					if (!internalBlockMouseInput)
-						internalMouseButtonEventHandler(event.mouseButton, false);
+					internalMouseButtonEventHandler(event.mouseButton, false);
 				}
 				break;
 			case sf::Event::MouseWheelScrolled:
-				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
+				if (window.hasFocus() and !internalBlockMouseInput)
 				{
 					onMouseWheel(event.mouseWheelScroll);
-					if (!internalBlockMouseInput)
 						internalMouseWhellScrollEventHandler(event.mouseWheelScroll);
 				}
 				break;
 			case sf::Event::MouseMoved:
-				if (window.hasFocus() and !ImGui::IsAnyWindowHovered())
+				if (window.hasFocus() and !internalBlockMouseInput)
 				{
 					onMouseMoved(event.mouseMove);
-					if (!internalBlockMouseInput)
-						internalMouseMoveHandler(event.mouseMove);
+					internalMouseMoveHandler(event.mouseMove);
 				}
 				break;
 			case sf::Event::MouseEntered:
@@ -308,7 +303,7 @@ int Testbed::run()
 				internalSizeEventHandler(event.size);
 				break;
 			case sf::Event::TextEntered:
-				if (window.hasFocus() and !ImGui::IsAnyWindowFocused())
+				if (window.hasFocus() and internalBlockKeyboadInput)
 				{
 					onTextEntered(event.text);
 				}
@@ -402,14 +397,14 @@ float Testbed::getWindowRelativeSizeDiff() const
 
 void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool pressed)
 {
-	if (!debug.inputControl or blockControlCurFrame)
+	if (!debug.keyboardControl or blockControlCurFrame)
 		return;
 
 	// Hotkeys
 	if (pressed)
 	{
-		if (debug.toggleGridHotkey == key)
-			debug.drawGrid = debug.drawGrid ? false : true;
+		if (debug.grid.toggleHotkey == key)
+			debug.grid.enabled = debug.grid.enabled ? false : true;
 		else if (debug.toggleViewportHotkey == key)
 			debug.drawViewport = debug.drawViewport ? false : true;
 		else if (debug.toggleInfoHotkey == key)
@@ -439,10 +434,10 @@ void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool presse
 
 void Testbed::internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent button, bool pressed)
 {
-	if (!debug.inputControl or blockControlCurFrame)
+	if (!debug.mouseControl or blockControlCurFrame)
 		return;
 	if (button.button == sf::Mouse::Middle and pressed) // Save mouse coords for shift
-		if (debug.enableCamera and debug.mouseCameraDragControl)
+		if (debug.camera.enabled and debug.camera.mousePan)
 			_cameraMousePixelCoord = window.mapPixelToCoords(sf::Mouse::getPosition());
 }
 
@@ -453,7 +448,7 @@ void Testbed::internalMouseMoveHandler(const sf::Event::MouseMoveEvent moved)
 
 void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelScrollEvent scrolled)
 {
-	if (debug.inputControl and debug.enableCamera and debug.mouseWheelZoom) // Zoom when mouse scroll view
+	if (debug.mouseControl and debug.camera.enabled and debug.camera.mouseWheelZoom) // Zoom when mouse scroll view
 	{
 		_viewSizeChanged = true;
 		sf::Vector2i pixel = { scrolled.x, scrolled.y };
@@ -463,13 +458,13 @@ void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelSc
 
 		if (scrolled.delta < 0)
 		{
-			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.maxViewSize) // Prevent for scale upper than 1e6 pixels
-				view.setSize(view.getSize() / (1.f / debug.cameraZoomSpeed));
+			if (std::max(window.getView().getSize().x, window.getView().getSize().y) < debug.camera.maxViewSize) // Prevent for scale upper than 1e6 pixels
+				view.setSize(view.getSize() / (1.f / debug.camera.zoomSpeed));
 		}
 		else
 		{
-			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.minViewSize) // Prevent for scale downer than 1e-2 pixels
-				view.setSize(view.getSize() * (1.f / debug.cameraZoomSpeed));
+			if (std::min(window.getView().getSize().x, window.getView().getSize().y) > debug.camera.minViewSize) // Prevent for scale downer than 1e-2 pixels
+				view.setSize(view.getSize() * (1.f / debug.camera.zoomSpeed));
 		}
 
 		window.setView(view);
@@ -501,19 +496,19 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 {
 	using Keys = sf::Keyboard::Key;
 	using sf::Keyboard;
-	if (debug.enableCamera and debug.inputControl and !blockControlCurFrame)
+	if (debug.camera.enabled and debug.keyboardControl and !blockControlCurFrame)
 	{
 		auto view = window.getView();
 		auto viewSize = window.getView().getSize();
-		if (window.hasFocus() and debug.enableCamera and debug.keyboardCameraControl and !internalBlockKeyboadInput and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
+		if (window.hasFocus() and debug.camera.enabled and debug.camera.keyboard and !internalBlockKeyboadInput and (Keyboard::isKeyPressed(Keys::Left) or Keyboard::isKeyPressed(Keys::Right) or Keyboard::isKeyPressed(Keys::Up) or Keyboard::isKeyPressed(Keys::Down)))
 		{
-			float speed = debug.cameraKeyboardSpeed * (debug.cameraKeyboardSpeed * std::min(viewSize.x, viewSize.y));
+			float speed = debug.camera.keybardSpeed * (debug.camera.keybardSpeed * std::min(viewSize.x, viewSize.y));
 
 			sf::Vector2f direction;
-			bool leftKey = Keyboard::isKeyPressed(Keys::Left);
-			bool rightKey = Keyboard::isKeyPressed(Keys::Right);
-			bool upKey = Keyboard::isKeyPressed(Keys::Up);
-			bool downKey = Keyboard::isKeyPressed(Keys::Down);
+			bool leftKey = Keyboard::isKeyPressed(debug.camera.moveLeftKey.code);
+			bool rightKey = Keyboard::isKeyPressed(debug.camera.moveRightKey.code);
+			bool upKey = Keyboard::isKeyPressed(debug.camera.moveUpKey.code);
+			bool downKey = Keyboard::isKeyPressed(debug.camera.moveDownKey.code);
 
 			if (leftKey)
 				direction.x = -speed;
@@ -529,7 +524,7 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 			view.move(direction);
 			window.setView(view);
 		}
-		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.mouseCameraDragControl and debug.inputControl and !blockControlCurFrame)
+		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.camera.mousePan and debug.mouseControl and !blockControlCurFrame)
 		{
 			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
@@ -557,49 +552,43 @@ void Testbed::internalDrawHandler()
 	// Draw debug window
 	if (debug.showDebugWindow)
 	{
-		using namespace ImGui;
-		ImGui::Begin("Debug menu", &debug.showDebugWindow);
-		Checkbox("##camera", &debug.enableCamera);
-		SameLine();
-		if (TreeNode("Camera"))
+		if (ImGui::Begin("Debug menu", &debug.showDebugWindow))
 		{
-			Checkbox("Keyboard control", &debug.keyboardCameraControl);
-			Checkbox("Mouse drag control", &debug.mouseCameraDragControl);
-			Checkbox("Mouse wheel zoom control", &debug.mouseWheelZoom);
-			TreePop();
-		}
-
-		Checkbox("##drawing", &debug.enableDrawing);
-		SameLine();
-		if (TreeNode("Gui"))
-		{
-
-			Checkbox("##grid", &debug.drawGrid);
-			SameLine();
-			if (TreeNode("Grid"))
+			ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+			ImGui::Checkbox("Drawing", &debug.enableDrawing);
+			ImGui::Checkbox("Viewport", &debug.drawViewport);
+			ImGui::Checkbox("Info", &debug.drawInfo);
+			ImGui::Checkbox("KeyboardControl", &debug.keyboardControl);
+			ImGui::Checkbox("Mouse control", &debug.mouseControl);
+			ImGui::Separator();
+			ImGui::Checkbox("##camera", &debug.camera.enabled);
+			ImGui::SameLine();
+			if (ImGui::TreeNode("Camera"))
 			{
-				int density = debug.gridBase;
-				SetNextItemWidth(40);
-				ImGui::DragInt("density", &density, 0.2, 20, 100);
-				ImGui::DragFloat("step size", &debug.gridCellSize, 0.2, 1.1, 14);
-				debug.gridBase = density;
-				TreePop();
+				ImGui::Checkbox("keyboard control", &debug.camera.keyboard);
+				ImGui::Checkbox("mouse wheel zoom", &debug.camera.mouseWheelZoom);
+				ImGui::Checkbox("mouse pan", &debug.camera.mousePan);
+				ImGui::InputFloat("min size", &debug.camera.minViewSize);
+				ImGui::InputFloat("max size", &debug.camera.maxViewSize);
+				ImGui::InputFloat("keyboard speed", &debug.camera.keybardSpeed);
+				ImGui::InputFloat("zoom speed", &debug.camera.zoomSpeed);
+				ImGui::TreePop();
 			}
-			//Checkbox("Grid", &debug.drawGrid);
-
-			Checkbox("Viewport", &debug.drawViewport);
-			Checkbox("Info", &debug.drawInfo);
-			TreePop();
+			ImGui::Checkbox("##grid", &debug.grid.enabled);
+			ImGui::SameLine();
+			if (ImGui::TreeNode("Grid"))
+			{
+				ImGui::Checkbox("zero axis", &debug.grid.zeroAxisGuideSaturationIncrease);
+				ImGui::Checkbox("dynamic", &debug.grid.dynamicScale);
+				int gridBase = debug.grid.base;
+				ImGui::SliderInt("base", &gridBase, 2, 16);
+				debug.grid.base = gridBase;
+				ImGui::InputFloat("cell size", &debug.grid.cellSize, 1.f);
+				ImGui::InputScalar("opaque", ImGuiDataType_U8, &debug.grid.opaque);
+				ImGui::TreePop();
+			}
+			ImGui::PopItemWidth();
 		}
-		//if (CollapsingHeader("Draw options"))
-		//{
-		//	Checkbox("Grid", &debug.drawGrid);
-		//	Checkbox("Viewport", &debug.drawViewport);
-		//	Checkbox("Info", &debug.drawInfo);
-		//}
-
-		//window.
-
 		ImGui::End();
 	}
 

@@ -38,29 +38,18 @@ public:
 	struct DebugSettings
 	{
 		Hotkey toggleDebugWindow { sf::Keyboard::Key::F1, false, true };
-		Hotkey toggleGridHotkey { sf::Keyboard::Key::G, false, true };
 		Hotkey toggleViewportHotkey { sf::Keyboard::Key::V, false, true };
 		Hotkey toggleInfoHotkey { sf::Keyboard::Key::I, false, true };
 		Hotkey resetViewHotkey { sf::Keyboard::Key::R, false, true };
 		Hotkey beginRulerHotkey { sf::Keyboard::Key::L };
 		size_t rulerBase = 100;
-		size_t gridBase = 4;
-		float maxViewSize = 1e6f;
-		float minViewSize = 1e-2f;
-		float gridCellSize = 32.f;
-		float cameraKeyboardSpeed = 0.1f;
-		float cameraZoomSpeed = 1.f + (1.f / 4.f);
-		sf::Uint8 gridOpaque = 64;
-		bool drawGrid = true;
+
 		bool drawViewport = true;
 		bool drawInfo = true;
 		bool enableDrawing = true;
-		bool enableCamera = true;
-		bool mouseWheelZoom = true;
-		bool mouseCameraDragControl = true;
-		bool keyboardCameraControl = false;
-		bool inputControl = true;
 		bool showDebugWindow = false;
+		bool keyboardControl = true;
+		bool mouseControl = true;
 		struct Grid
 		{
 			size_t base = 4;
@@ -77,7 +66,6 @@ public:
 			float maxViewSize = 1e6f;
 			float keybardSpeed = 0.1f;
 			float zoomSpeed = 1.f + (1.f / 3.f);
-			Hotkey toggleHotkey;
 			Hotkey moveLeftKey { sf::Keyboard::Key::Left };
 			Hotkey moveRightKey { sf::Keyboard::Key::Right };
 			Hotkey moveUpKey { sf::Keyboard::Key::Up };

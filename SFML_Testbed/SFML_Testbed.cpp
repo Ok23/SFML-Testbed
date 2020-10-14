@@ -1,7 +1,7 @@
 ﻿#include "pch.h"
 #include "Testbed.h"
 #include <execution>
-
+#include <magic_enum.hpp>
 
 
 class TestbedClass : public Testbed
@@ -13,7 +13,6 @@ protected:
 	}
 	void draw() override
 	{
-		//ImGui::ShowDemoWindow();
 	}
 	void update(const sf::Time delta) override
 	{
