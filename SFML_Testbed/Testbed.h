@@ -3,11 +3,11 @@
 #include <iostream>
 #include <sstream>
 #include <magic_enum.hpp>
+
+
 using namespace magic_enum::bitwise_operators;
 using namespace magic_enum::ostream_operators;
 
-template<typename ... Args>
-void print(Args &&... args);
 
 template<typename T>
 T _inspectExpr(std::string_view expr, T && result, const char * func, size_t line);
@@ -132,14 +132,12 @@ private:
 	sf::Uint32 windowStyle;
 	sf::ContextSettings windowContext;
 
-	sf::Vector2f _prevFrameViewSize;
 	sf::Vector2f _cameraMousePixelCoord;
 	sf::Vector2f _rulerWorldStart;
 	sf::Vector2i _rulerStart;
 	float _previousTargetZoom;
 	float _gridStep;
 	float _rulerLength;
-	bool _viewSizeChanged;
 	bool _screenRuler;
 	bool _guiViewApplied;
 

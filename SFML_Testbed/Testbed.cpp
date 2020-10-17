@@ -2,12 +2,23 @@
 #include "Testbed.h"
 #include <sstream>
 #include <magic_enum.hpp>
-#include <imgui_internal.h>
-#include <set>
-#include "magic_get/include/boost/pfr.hpp"
+#include <ft2build.h>
+#include <freetype/freetype.h>
+#include <imgui/misc/freetype/imgui_freetype.h>
+#include <wykobi/wykobi.hpp>
 
 #pragma warning(push)
 #pragma warning(disable: 26451)
+
+
+using point = wykobi::point2d<float>;
+using vector = wykobi::vector2d<float>;
+using segment = wykobi::segment<float, 2>;
+using rect = wykobi::rectangle<float>;
+using quad = wykobi::quadix<float, 2>;
+using tri = wykobi::triangle<float, 2>;
+using poly = wykobi::polygon<float, 2>;
+
 
 static float _maxExprWidth = 0;
 static float _maxResultWidth = 0;
@@ -191,7 +202,7 @@ T _inspectExpr(std::string_view expr, T && result, const char * func, size_t lin
 
 
 Testbed::Testbed(sf::VideoMode videoMode, std::string_view title, sf::ContextSettings windowSettings, sf::Uint32 windowStyle)
-	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), internalBlockKeyboadInput(false), internalBlockMouseInput(false), _previousTargetZoom(0.f), _viewSizeChanged(true), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
+	: videoMode(videoMode), windowTitle(windowTitle), windowContext(windowSettings), windowStyle(windowStyle), window(), isRunning(false), blockControlCurFrame(false), internalBlockKeyboadInput(false), internalBlockMouseInput(false), _previousTargetZoom(0.f), _gridStep(0), _screenRuler(false), _guiViewApplied(false)
 {
 	defaultFont.loadFromFile("verdana.ttf");
 }
@@ -219,7 +230,7 @@ int Testbed::run()
 		window.create(videoMode, windowTitle, windowStyle, windowContext);
 		window.setFramerateLimit(60);
 	}
-	ImGui::SFML::Init(window, true);
+	ImGui::SFML::Init(window, false);
 	ImGui::GetStyle().WindowRounding = 0;
 	ImGui::GetStyle().ChildRounding = 0;
 	ImGui::GetStyle().FrameRounding = 0;
@@ -227,8 +238,16 @@ int Testbed::run()
 	ImGui::GetStyle().ScrollbarRounding = 0;
 	ImGui::GetStyle().GrabRounding = 0;
 	ImGui::GetStyle().TabRounding = 0;
+	ImGui::GetStyle().WindowMenuButtonPosition = ImGuiDir_Right;
+	{
+		auto & io = ImGui::GetIO();
+		ImFontConfig conf;
+		conf.RasterizerFlags = ImGuiFreeType::Monochrome | ImGuiFreeType::MonoHinting;
+		io.Fonts->AddFontFromFileTTF("verdana.ttf", 13, &conf, io.Fonts->GetGlyphRangesCyrillic());
 
-	ImGui::GetStyle().WindowBorderSize = 0;
+		ImGuiFreeType::BuildFontAtlas(io.Fonts);
+		ImGui::SFML::UpdateFontTexture();
+	}
 	load();
 	while (window.isOpen())
 	{
@@ -238,7 +257,7 @@ int Testbed::run()
 		{
 			ImGui::SFML::ProcessEvent(event);
 			onEvent(event);
-			internalBlockKeyboadInput = ImGui::GetIO().WantCaptureKeyboard;
+			internalBlockKeyboadInput = ImGui::GetIO().WantCaptureKeyboard or ImGui::GetIO().WantTextInput;
 			internalBlockMouseInput = ImGui::GetIO().WantCaptureMouse;
 			blockControlCurFrame = internalBlockKeyboadInput;
 			switch (event.type)
@@ -314,34 +333,20 @@ int Testbed::run()
 
 		}
 		auto dt = delta.restart();
-		ImGui::SFML::Update(window, dt);
 
 		update(dt);
-		if (_prevFrameViewSize != window.getView().getSize())
-		{
-			_prevFrameViewSize = window.getView().getSize();
-			_viewSizeChanged = true;
-		}
+		ImGui::SFML::Update(window, dt);
 		if (window.hasFocus())
 			internalUpdateHandler(dt);
 
 		draw();
-		if (_prevFrameViewSize != window.getView().getSize())
-		{
-			_prevFrameViewSize = window.getView().getSize();
-			_viewSizeChanged = true;
-		}
 		internalDrawHandler();
 		ImGui::SFML::Render(window);
 		window.display();
 
 		blockControlCurFrame = false;
-		_viewSizeChanged = false;
 	}
 	ImGui::SFML::Shutdown();
-	{
-		_viewSizeChanged = true;
-	}
 	isRunning = false;
 	return 0;
 }
@@ -368,7 +373,6 @@ void Testbed::resetViewport()
 	view.setCenter(sf::Vector2f { window.getSize().x / 2.f, window.getSize().y / 2.f });
 	view.setRotation(0);
 	window.setView(view);
-	_viewSizeChanged = true;
 }
 
 void Testbed::blockCurFrameControl()
@@ -403,16 +407,12 @@ void Testbed::internalKeyEventHandler(const sf::Event::KeyEvent key, bool presse
 	// Hotkeys
 	if (pressed)
 	{
-		if (debug.grid.toggleHotkey == key)
-			debug.grid.enabled = debug.grid.enabled ? false : true;
-		else if (debug.toggleViewportHotkey == key)
-			debug.drawViewport = debug.drawViewport ? false : true;
-		else if (debug.toggleInfoHotkey == key)
-			debug.drawInfo = debug.drawInfo ? false : true;
-		else if (debug.resetViewHotkey == key)
+		debug.grid.enabled ^= debug.grid.toggleHotkey == key;
+		debug.drawViewport ^= debug.toggleViewportHotkey == key;
+		debug.drawInfo ^= debug.toggleInfoHotkey == key;
+		debug.showDebugWindow ^= debug.toggleDebugWindow == key;
+		if (debug.resetViewHotkey == key)
 			resetViewport();
-		else if (debug.toggleDebugWindow == key)
-			debug.showDebugWindow = debug.showDebugWindow ? false : true;
 	}
 	if (debug.beginRulerHotkey == key)
 	{
@@ -450,7 +450,6 @@ void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelSc
 {
 	if (debug.mouseControl and debug.camera.enabled and debug.camera.mouseWheelZoom) // Zoom when mouse scroll view
 	{
-		_viewSizeChanged = true;
 		sf::Vector2i pixel = { scrolled.x, scrolled.y };
 
 		const sf::Vector2f beforeCoord { window.mapPixelToCoords(pixel) };
@@ -488,7 +487,6 @@ void Testbed::internalSizeEventHandler(const sf::Event::SizeEvent size)
 	view.setSize(window.getSize().x, window.getSize().y);
 	view.setSize(view.getSize() * (zoomLevel));
 	view.setCenter(view.getCenter() + (view.getSize() - oldViewSize) / 2.f);
-	_viewSizeChanged = true;
 	window.setView(view);
 }
 
@@ -524,7 +522,7 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 			view.move(direction);
 			window.setView(view);
 		}
-		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.camera.mousePan and debug.mouseControl and !blockControlCurFrame)
+		else if (sf::Mouse::isButtonPressed(sf::Mouse::Middle) and debug.camera.mousePan and debug.mouseControl and !blockControlCurFrame and !internalBlockMouseInput)
 		{
 			auto mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 			sf::Vector2f shift = sf::Vector2f(_cameraMousePixelCoord - mousePos);
@@ -558,34 +556,38 @@ void Testbed::internalDrawHandler()
 			ImGui::Checkbox("Drawing", &debug.enableDrawing);
 			ImGui::Checkbox("Viewport", &debug.drawViewport);
 			ImGui::Checkbox("Info", &debug.drawInfo);
-			ImGui::Checkbox("KeyboardControl", &debug.keyboardControl);
+			ImGui::Checkbox("Keyboard control", &debug.keyboardControl);
 			ImGui::Checkbox("Mouse control", &debug.mouseControl);
-			ImGui::Separator();
-			ImGui::Checkbox("##camera", &debug.camera.enabled);
-			ImGui::SameLine();
-			if (ImGui::TreeNode("Camera"))
+
+			if (ImGui::BeginTabBar("options"))
 			{
-				ImGui::Checkbox("keyboard control", &debug.camera.keyboard);
-				ImGui::Checkbox("mouse wheel zoom", &debug.camera.mouseWheelZoom);
-				ImGui::Checkbox("mouse pan", &debug.camera.mousePan);
-				ImGui::InputFloat("min size", &debug.camera.minViewSize);
-				ImGui::InputFloat("max size", &debug.camera.maxViewSize);
-				ImGui::InputFloat("keyboard speed", &debug.camera.keybardSpeed);
-				ImGui::InputFloat("zoom speed", &debug.camera.zoomSpeed);
-				ImGui::TreePop();
-			}
-			ImGui::Checkbox("##grid", &debug.grid.enabled);
-			ImGui::SameLine();
-			if (ImGui::TreeNode("Grid"))
-			{
-				ImGui::Checkbox("zero axis", &debug.grid.zeroAxisGuideSaturationIncrease);
-				ImGui::Checkbox("dynamic", &debug.grid.dynamicScale);
-				int gridBase = debug.grid.base;
-				ImGui::SliderInt("base", &gridBase, 2, 16);
-				debug.grid.base = gridBase;
-				ImGui::InputFloat("cell size", &debug.grid.cellSize, 1.f);
-				ImGui::InputScalar("opaque", ImGuiDataType_U8, &debug.grid.opaque);
-				ImGui::TreePop();
+				if (ImGui::BeginTabItem("Camera"))
+				{
+					ImGui::Checkbox("enabled", &debug.camera.enabled);
+					ImGui::Checkbox("keyboard control", &debug.camera.keyboard);
+					ImGui::Checkbox("mouse wheel zoom", &debug.camera.mouseWheelZoom);
+					ImGui::Checkbox("mouse pan", &debug.camera.mousePan);
+					ImGui::InputFloat("min size", &debug.camera.minViewSize);
+					ImGui::InputFloat("max size", &debug.camera.maxViewSize);
+					ImGui::InputFloat("keyboard speed", &debug.camera.keybardSpeed);
+					ImGui::InputFloat("zoom speed", &debug.camera.zoomSpeed);
+					ImGui::EndTabItem();
+				}
+				if (ImGui::BeginTabItem("Grid"))
+				{
+					ImGui::Checkbox("enabled", &debug.grid.enabled);
+					ImGui::Checkbox("zero axis", &debug.grid.zeroAxisGuideSaturationIncrease);
+					ImGui::Checkbox("dynamic", &debug.grid.dynamicScale);
+					int gridBase = debug.grid.base;
+					ImGui::SliderInt("base", &gridBase, 2, 16);
+					debug.grid.base = gridBase;
+					ImGui::InputFloat("cell size", &debug.grid.cellSize, 1.f);
+					ImGui::InputScalar("opaque", ImGuiDataType_U8, &debug.grid.opaque);
+
+					ImGui::EndTabItem();
+				}
+
+				ImGui::EndTabBar();
 			}
 			ImGui::PopItemWidth();
 		}

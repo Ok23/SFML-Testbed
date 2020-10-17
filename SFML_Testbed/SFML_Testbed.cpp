@@ -1,12 +1,9 @@
 ﻿#include "pch.h"
 #include "Testbed.h"
-#include <execution>
-#include <magic_enum.hpp>
 
 
 class TestbedClass : public Testbed
 {
-	sf::Clock fps;
 protected:
 	void load() override
 	{
@@ -23,7 +20,6 @@ protected:
 	void onTextEntered(const sf::Event::TextEvent text) override
 	{
 	}
-
 };
 
 

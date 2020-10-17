@@ -42,6 +42,12 @@
     <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\imgui.cpp">
       <Filter>External</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\misc\freetype\imgui_freetype.cpp">
+      <Filter>External</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\Sources\Libraries\imgui\misc\cpp\imgui_stdlib.cpp">
+      <Filter>External</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -53,8 +59,5 @@
   </ItemGroup>
   <ItemGroup>
     <Font Include="verdana.ttf" />
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="NatvisFile.natvis" />
   </ItemGroup>
 </Project>
