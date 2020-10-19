@@ -380,11 +380,6 @@ void Testbed::blockCurFrameControl()
 	blockControlCurFrame = true;
 }
 
-const sf::Vector2i Testbed::getMousePos() const
-{
-	return mousePos;
-}
-
 sf::View Testbed::getGuiView() const
 {
 	sf::View guiView = window.getView();
@@ -443,7 +438,7 @@ void Testbed::internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent 
 
 void Testbed::internalMouseMoveHandler(const sf::Event::MouseMoveEvent moved)
 {
-	mousePos = { moved.x, moved.y };
+	
 }
 
 void Testbed::internalMouseWhellScrollEventHandler(const sf::Event::MouseWheelScrollEvent scrolled)
@@ -494,6 +489,15 @@ void Testbed::internalUpdateHandler(const sf::Time delta)
 {
 	using Keys = sf::Keyboard::Key;
 	using sf::Keyboard;
+
+	debug.grid.base = std::clamp<size_t>(debug.grid.base, 2, 16);
+	debug.grid.cellSize = std::clamp<float>(debug.grid.cellSize, 8, 128);
+
+	debug.camera.keybardSpeed = std::clamp<float>(debug.camera.keybardSpeed, 0.01, 0.5);
+	debug.camera.minViewSize = std::clamp<float>(debug.camera.minViewSize, 1e-5, 100);
+	debug.camera.maxViewSize = std::clamp<float>(debug.camera.maxViewSize, 1e+4, 1e+8);
+	debug.camera.zoomSpeed = std::clamp<float>(debug.camera.zoomSpeed, 1.01, 2);
+
 	if (debug.camera.enabled and debug.keyboardControl and !blockControlCurFrame)
 	{
 		auto view = window.getView();
@@ -567,8 +571,8 @@ void Testbed::internalDrawHandler()
 					ImGui::Checkbox("keyboard control", &debug.camera.keyboard);
 					ImGui::Checkbox("mouse wheel zoom", &debug.camera.mouseWheelZoom);
 					ImGui::Checkbox("mouse pan", &debug.camera.mousePan);
-					ImGui::InputFloat("min size", &debug.camera.minViewSize);
-					ImGui::InputFloat("max size", &debug.camera.maxViewSize);
+					ImGui::InputFloat("min size", &debug.camera.minViewSize, 0, 0, "%.1e");
+					ImGui::InputFloat("max size", &debug.camera.maxViewSize, 0, 0, "%.1e");
 					ImGui::InputFloat("keyboard speed", &debug.camera.keybardSpeed);
 					ImGui::InputFloat("zoom speed", &debug.camera.zoomSpeed);
 					ImGui::EndTabItem();
@@ -578,11 +582,12 @@ void Testbed::internalDrawHandler()
 					ImGui::Checkbox("enabled", &debug.grid.enabled);
 					ImGui::Checkbox("zero axis", &debug.grid.zeroAxisGuideSaturationIncrease);
 					ImGui::Checkbox("dynamic", &debug.grid.dynamicScale);
-					int gridBase = debug.grid.base;
-					ImGui::SliderInt("base", &gridBase, 2, 16);
-					debug.grid.base = gridBase;
-					ImGui::InputFloat("cell size", &debug.grid.cellSize, 1.f);
-					ImGui::InputScalar("opaque", ImGuiDataType_U8, &debug.grid.opaque);
+					size_t minB = 2, maxB = 16;
+					ImGui::SliderScalar("base", ImGuiDataType_U64, &debug.grid.base, &minB, &maxB);
+					ImGui::InputFloat("cell size", &debug.grid.cellSize, 1.f, 10.f);
+					debug.grid.cellSize = std::clamp(debug.grid.cellSize, 8.f, 128.f);
+					int step = 5, stepFast = 10;
+					ImGui::InputScalar("opaque", ImGuiDataType_U8, &debug.grid.opaque, &step, &stepFast);
 
 					ImGui::EndTabItem();
 				}
@@ -704,7 +709,7 @@ void Testbed::internalDrawHandler()
 		// End ruler
 
 		scaleFormatStr.flush();
-		sf::Vector2f mousePos = window.mapPixelToCoords(getMousePos());
+		sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition());
 		scaleFormatStr << "(" << (int)mousePos.x << ", " << (int)mousePos.y << ")";
 		text.setString(scaleFormatStr.str());
 		sf::FloatRect textBound = text.getLocalBounds();
