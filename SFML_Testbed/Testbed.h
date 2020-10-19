@@ -17,7 +17,6 @@ T _inspectExpr(std::string_view expr, T && result, const char * func, size_t lin
 _inspectExpr(#arg, (arg), __FUNCTION__, __LINE__)
 
 
-
 using Key = sf::Keyboard::Key;
 
 
@@ -103,7 +102,6 @@ protected:
 
 	void resetViewport();
 	void blockCurFrameControl();
-	const sf::Vector2i getMousePos() const;
 
 	sf::RenderWindow window;
 	DebugSettings debug;
@@ -118,7 +116,6 @@ private:
 	void internalUpdateHandler(const sf::Time delta);
 	void internalDrawHandler();
 
-	sf::Vector2i mousePos;
 	const sf::Clock runTime;
 	sf::Clock delta;
 	sf::Font defaultFont;
