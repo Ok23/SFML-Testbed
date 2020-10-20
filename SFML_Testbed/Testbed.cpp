@@ -803,6 +803,7 @@ void Testbed::internalDrawHandler()
 			}
 		}
 
+
 		FloatT gridDensity = (1.0 - (grid.cellSize / guiScaleDiff) / middle(cellSize, cellSize * grid.base));
 
 		FloatT subGridColorEase = grid.opaque * (1.f - std::pow(1.f - std::max(gridDensity, 0.0), 2));
@@ -812,7 +813,8 @@ void Testbed::internalDrawHandler()
 		start.x -= std::fmod(start.x, cellSize) + cellSize;
 		start.y -= std::fmod(start.y, cellSize) + cellSize;
 
-		subGridColor.a = subGridColorEase;
+		if (grid.dynamicScaleFading)
+			subGridColor.a = subGridColorEase;
 
 		if (!grid.dynamicScale and subGridColor.a <= 0.01)
 		{

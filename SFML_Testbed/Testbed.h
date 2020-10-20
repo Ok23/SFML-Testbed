@@ -56,6 +56,7 @@ public:
 			Hotkey toggleHotkey { sf::Keyboard::Key::G, false, true };
 			sf::Uint8 opaque = 85;
 			bool enabled = true;
+			bool dynamicScaleFading = true;
 			bool zeroAxisGuideSaturationIncrease = true;
 			bool dynamicScale = true;
 		} grid;
