@@ -7,4 +7,5 @@ Dependencies
 - **ImGui (https://github.com/ocornut/imgui)**
 - **imgui-sfml (https://github.com/eliasdaler/imgui-sfml)**
 - **wykobi (https://github.com/ArashPartow/wykobi)**
-- **pprint (https://github.com/p-ranav/pprint)**
+- **magic_enum (https://github.com/Neargye/magic_enum)**
+- **freetype**
