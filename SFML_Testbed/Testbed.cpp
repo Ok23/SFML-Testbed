@@ -231,15 +231,30 @@ int Testbed::run()
 		window.setFramerateLimit(60);
 	}
 	ImGui::SFML::Init(window, false);
-	ImGui::GetStyle().WindowRounding = 0;
-	ImGui::GetStyle().ChildRounding = 0;
-	ImGui::GetStyle().FrameRounding = 0;
-	ImGui::GetStyle().PopupRounding = 0;
-	ImGui::GetStyle().ScrollbarRounding = 0;
-	ImGui::GetStyle().GrabRounding = 0;
-	ImGui::GetStyle().TabRounding = 0;
-	ImGui::GetStyle().WindowMenuButtonPosition = ImGuiDir_Right;
-	{
+
+	{ // Set custom style settings
+		ImGui::GetStyle().WindowRounding = 0;
+		ImGui::GetStyle().ChildRounding = 0;
+		ImGui::GetStyle().FrameRounding = 0;
+		ImGui::GetStyle().PopupRounding = 0;
+		ImGui::GetStyle().ScrollbarRounding = 0;
+		ImGui::GetStyle().GrabRounding = 0;
+		ImGui::GetStyle().TabRounding = 4;
+		ImGui::GetStyle().WindowMenuButtonPosition = ImGuiDir_Right;
+
+		ImVec4 * colors = ImGui::GetStyle().Colors;
+		colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.06f, 1.00f);
+		colors[ImGuiCol_FrameBg] = ImVec4(0.18f, 0.18f, 0.18f, 0.54f);
+		colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+		colors[ImGuiCol_SliderGrab] = ImVec4(0.77f, 0.77f, 0.77f, 1.00f);
+		colors[ImGuiCol_Button] = ImVec4(0.36f, 0.36f, 0.36f, 0.40f);
+		colors[ImGuiCol_Header] = ImVec4(0.33f, 0.33f, 0.33f, 0.31f);
+		colors[ImGuiCol_ResizeGrip] = ImVec4(1.00f, 1.00f, 1.00f, 0.25f);
+		colors[ImGuiCol_Tab] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
+		colors[ImGuiCol_TabActive] = ImVec4(0.20f, 0.41f, 0.68f, 1.00f);
+	}
+
+	{ // Set default font to verdana.ttf
 		auto & io = ImGui::GetIO();
 		ImFontConfig conf;
 		conf.RasterizerFlags = ImGuiFreeType::Monochrome | ImGuiFreeType::MonoHinting;
