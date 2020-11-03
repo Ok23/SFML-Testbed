@@ -13,6 +13,186 @@ template<typename T>
 T _inspectExpr(std::string_view expr, T && result, const char * func, size_t line);
 
 
+static float _maxExprWidth = 0;
+static float _maxResultWidth = 0;
+static int _curFrame = -1;
+static std::map<size_t, size_t> _hashSet;
+
+template<typename T>
+T _inspectExpr(std::string_view expr, T && result, const char * func, size_t line)
+{
+	using UnderT = std::decay_t<T>;
+
+	static thread_local std::ostringstream format;
+
+	struct detail
+	{
+		static constexpr ImGuiDataType_ IsBaseTypeOf()
+		{
+			ImGuiDataType_ resultType = ImGuiDataType_::ImGuiDataType_COUNT;
+			if (std::is_same_v<ImS8, UnderT> or std::is_same_v<bool, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S8;
+			}
+			else if (std::is_same_v<ImU8, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U8;
+			}
+			else if (std::is_same_v<ImS16, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S16;
+			}
+			else if (std::is_same_v<ImU16, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U16;
+			}
+			else if (std::is_same_v<ImS32, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S32;
+			}
+			else if (std::is_same_v<ImU32, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U32;
+			}
+			else if (std::is_same_v<ImS64, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_S64;
+			}
+			else if (std::is_same_v<ImU64, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_U64;
+			}
+			else if (std::is_same_v<float, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_Float;
+			}
+			else if (std::is_same_v<double, UnderT>)
+			{
+				resultType = ImGuiDataType_::ImGuiDataType_Double;
+			}
+			return resultType;
+		}
+	};
+
+	auto exprHash = std::hash<std::string_view> {}(expr);
+
+	constexpr ImGuiDataType_ resultType = detail::IsBaseTypeOf();;
+	constexpr bool isEnum = std::is_enum_v<UnderT>;
+	constexpr bool editable = std::is_lvalue_reference_v<T> and !std::is_const_v<std::remove_reference_t<T>> and (resultType != ImGuiDataType_::ImGuiDataType_COUNT or isEnum);
+
+	ImGui::Begin("Expressions", nullptr, ImGuiWindowFlags_NoScrollbar);
+	ImGui::Columns(2, nullptr, false);
+
+	if (_curFrame != ImGui::GetFrameCount())
+	{
+		_hashSet.clear();
+		_curFrame = ImGui::GetFrameCount();
+	}
+	auto finded = _hashSet.find(exprHash);
+	if (finded != _hashSet.end())
+	{
+		finded->second += 1;
+		exprHash += finded->second;
+	}
+	else
+	{
+		_hashSet.emplace(std::map<size_t, size_t>::value_type { exprHash, 0 });
+	}
+
+	format << "##" << expr << exprHash;
+	const auto exprStringId = format.str();
+	format.str("");
+	if constexpr (isEnum)
+	{
+		format << magic_enum::enum_name(result);
+	}
+	else
+	{
+		format << result;
+	}
+
+	const auto resultString = format.str();
+	format.str("");
+	format << "[" << typeid(T).name() << "] " << func << " - " << line;
+	const auto callLocationString = format.str();
+	format.str("");
+
+
+
+	bool openEditPopup = false;
+	if (editable)
+	{
+		ImGui::TextColored({ 151.f / 255.f, 173.f / 255.f, 237.f / 255.f, 1.f }, expr.data());
+		if (ImGui::IsItemClicked())
+			ImGui::OpenPopup(exprStringId.data());
+	}
+	else
+	{
+		ImGui::Text(expr.data());
+	}
+
+	_maxExprWidth = std::max(ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x + 5, _maxExprWidth);
+
+	if (ImGui::IsItemHovered())
+	{
+		ImGui::BeginTooltip();
+		ImGui::Text(callLocationString.data());
+		ImGui::EndTooltip();
+	}
+
+
+	ImGui::NextColumn();
+
+	ImGui::Text(resultString.data());
+	_maxResultWidth = std::max(ImGui::GetItemRectSize().x + ImGui::GetStyle().ItemSpacing.x + ImGui::GetStyle().WindowPadding.x, _maxResultWidth);
+
+	//print(maxExprWidth, maxResultWidth);
+
+	if (ImGui::IsItemClicked() and editable)
+		ImGui::OpenPopup(exprStringId.data());
+	if constexpr (editable)
+	{
+		if (ImGui::BeginPopup(exprStringId.data()))
+		{
+			if constexpr (resultType != ImGuiDataType_COUNT)
+			{
+				ImGui::SetNextItemWidth(100);
+				ImGui::InputScalar(exprStringId.data(), resultType, &result);
+			}
+			else if (isEnum)
+			{
+				int curItem = (std::underlying_type_t<UnderT>)result;
+				if (ImGui::BeginCombo(exprStringId.data(), magic_enum::enum_name(result).data()))
+				{
+					constexpr auto & entries = magic_enum::enum_entries<T>();
+					bool selected = false;
+					for (size_t i = 0; i < entries.size(); ++i)
+					{
+						if (curItem == i)
+							selected = true;
+
+						if (ImGui::Selectable(entries[i].second.data(), &selected))
+							result = (T)i;
+						selected = false;
+					}
+					ImGui::EndCombo();
+				}
+
+			}
+			ImGui::EndPopup();
+		}
+
+	}
+	ImGui::SetColumnWidth(0, _maxExprWidth);
+	ImGui::SetColumnWidth(1, _maxResultWidth);
+	ImGui::SetWindowSize({ _maxExprWidth + _maxResultWidth + ImGui::GetStyle().IndentSpacing, 0 });
+
+	ImGui::Separator();
+	ImGui::End();
+	return result;
+}
+
+
 #define Inspect(arg) \
 _inspectExpr(#arg, (arg), __FUNCTION__, __LINE__)
 
