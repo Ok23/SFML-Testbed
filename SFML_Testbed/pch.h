@@ -8,9 +8,9 @@
 #include <numeric>
 #include <string_view>
 
-#include <imgui/imgui.h>
-#include <imgui/misc/cpp/imgui_stdlib.h>
-#include <imgui-sfml/imgui-SFML.h>
+#include <imgui.h>
+#include <imgui_stdlib.h>
+#include <imgui-SFML.h>
 #include <SFML/Graphics.hpp>
 #include <magic_enum.hpp>
 
