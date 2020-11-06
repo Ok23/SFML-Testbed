@@ -221,7 +221,7 @@ public:
 		Hotkey toggleInfoHotkey { sf::Keyboard::Key::I, false, true };
 		Hotkey resetViewHotkey { sf::Keyboard::Key::R, false, true };
 		Hotkey beginRulerHotkey { sf::Keyboard::Key::L };
-		size_t rulerBase = 100;
+		float rulerBase = 64.f;
 
 		bool drawViewport = true;
 		bool drawInfo = true;
@@ -281,13 +281,13 @@ protected:
 	/// @return If true close window
 	virtual bool onExitEvent();
 
-	void resetViewport();
+	void resetView();
 	void blockCurFrameControl();
 
 	sf::RenderWindow window;
 	DebugSettings debug;
 	sf::View getGuiView() const;
-	float getWindowRelativeSizeDiff() const;
+	sf::Vector2f getViewScale() const;
 private:
 	void internalKeyEventHandler(const sf::Event::KeyEvent key, bool pressed);
 	void internalMouseButtonEventHandler(const sf::Event::MouseButtonEvent button, bool pressed);
@@ -354,8 +354,29 @@ void print(Args &&... args)
 
 
 template<typename T>
+sf::Vector2<T> operator / (const sf::Vector2<T> & first, const sf::Vector2<T> & second)
+{
+	return { first.x / second.x, first.y / second.y };
+}
+
+
+template<typename T>
+sf::Vector2<T> operator * (const sf::Vector2<T> & first, const sf::Vector2<T> & second)
+{
+	return { first.x * second.x, first.y * second.y };
+}
+
+
+template<typename T>
 std::ostream & operator << (std::ostream & os, const sf::Vector2<T> & vec)
 {
 	os << "{ " << vec.x << ", " << vec.y << " }";
+	return os;
+}
+
+template<typename T>
+std::ostream & operator << (std::ostream & os, const sf::Rect<T> & rect)
+{
+	os << "{ " << rect.left << ", " << rect.top << ", " << rect.width  << ", " << rect.height <<  " }";
 	return os;
 }
